@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'daily_report_screen.dart';
+import 'reports_menu_screen.dart';
 import '../main.dart';
 import '../models/boss.dart';
 import 'add_boss_screen.dart';
@@ -14,6 +14,13 @@ class BossDetailScreen extends StatefulWidget {
 }
 
 class _BossDetailScreenState extends State<BossDetailScreen> {
+  int _currentBalance(String bossId, int opening) {
+    final all = txStore.items.where((t) => t.bossId == bossId && !t.deleted);
+    final dep = all.where((t) => t.type == "deposit").fold<int>(0, (s, t) => s + t.totalKs);
+    final wd  = all.where((t) => t.type == "withdraw").fold<int>(0, (s, t) => s + t.totalKs);
+    return opening + dep - wd;
+  }
+
   static const _cherry = Color(0xFFFF2D55);
   static const _cherryDark = Color(0xFF9F1239);
   static const _border = Color(0xFFFFCFE0);
@@ -99,7 +106,10 @@ class _BossDetailScreenState extends State<BossDetailScreen> {
       );
     }
 
-    final bigBal = formatMMK(b.openingBalanceMmk);
+    final currentBal = _currentBalance(b.id, b.openingBalanceMmk);
+    final bigBal = formatMMK(currentBal);
+
+    final openingBal = formatMMK(b.openingBalanceMmk);
 
     return Scaffold(
       appBar: AppBar(
@@ -178,7 +188,7 @@ class _BossDetailScreenState extends State<BossDetailScreen> {
               value: b.address.isEmpty ? "-" : b.address,
             ),
             const SizedBox(height: 10),
-            _InfoTile(label: "Opening Balance", value: bigBal),
+            _InfoTile(label: "Opening Balance", value: openingBal),
 
             const SizedBox(height: 16),
 
@@ -206,7 +216,7 @@ class _BossDetailScreenState extends State<BossDetailScreen> {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) =>
-                              DailyReportScreen(bossId: b.id, bossName: b.name),
+                              ReportsMenuScreen(bossId: b.id, bossName: b.name),
                         ),
                       );
                     },
