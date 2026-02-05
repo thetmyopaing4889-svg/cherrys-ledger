@@ -11,66 +11,9 @@ class ReportsMenuScreen extends StatelessWidget {
     required this.bossName,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFFF5F7),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          "Report ရွေးရန်",
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _bigBtn(
-              context,
-              title: "Daily Report (နေ့စဉ်)",
-              icon: Icons.calendar_today_rounded,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        DailyReportScreen(bossId: bossId, bossName: bossName),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            _bigBtn(
-              context,
-              title: "Monthly Report (လစဉ်)",
-              icon: Icons.date_range_rounded,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Monthly Report ကို နောက်တစ်ဆင့် ဆက်လုပ်မယ်"),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            _bigBtn(
-              context,
-              title: "Yearly Report (နှစ်စဉ်)",
-              icon: Icons.bar_chart_rounded,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Yearly Report ကို နောက်တစ်ဆင့် ဆက်လုပ်မယ်"),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  static const _bg = Color(0xFFFFF6F8);
+  static const _cardBorder = Color(0xFFFFD0DA);
+  static const _cherry = Color(0xFFFF2D55);
 
   Widget _bigBtn(
     BuildContext context, {
@@ -87,10 +30,10 @@ class ReportsMenuScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFFFD0DA)),
+          border: Border.all(color: _cardBorder),
           boxShadow: [
             BoxShadow(
-              blurRadius: 18,
+              blurRadius: 16,
               offset: const Offset(0, 10),
               color: Colors.black.withOpacity(0.06),
             ),
@@ -105,7 +48,7 @@ class ReportsMenuScreen extends StatelessWidget {
                 color: const Color(0xFFFFEFF3),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: const Color(0xFFE91E63)),
+              child: Icon(icon, color: _cherry),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -113,11 +56,70 @@ class ReportsMenuScreen extends StatelessWidget {
                 title,
                 style: const TextStyle(
                   fontSize: 16,
-                  fontWeight: FontWeight.w800,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
             const Icon(Icons.chevron_right_rounded),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          "Report ရွေးရန်",
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _bigBtn(
+              context,
+              title: "Daily Report (နေ့စဉ်)",
+              icon: Icons.calendar_today_rounded,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => DailyReportScreen(
+                      bossId: bossId,
+                      bossName: bossName,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _bigBtn(
+              context,
+              title: "Monthly Report (လစဉ်)",
+              icon: Icons.date_range_rounded,
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Monthly Report ကို နောက်တစ်ဆင့် ဆက်လုပ်မယ်")),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _bigBtn(
+              context,
+              title: "Yearly Report (နှစ်စဉ်)",
+              icon: Icons.bar_chart_rounded,
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Yearly Report ကို နောက်တစ်ဆင့် ဆက်လုပ်မယ်")),
+                );
+              },
+            ),
           ],
         ),
       ),
