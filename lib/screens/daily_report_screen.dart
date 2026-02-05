@@ -1,7 +1,7 @@
-import "../models/ledger_tx.dart";
 import "../main.dart";
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import "../models/ledger_tx.dart";
+import "package:flutter/material.dart";
+import "package:intl/intl.dart";
 
 class DailyReportScreen extends StatefulWidget {
   final String bossId;
@@ -18,81 +18,98 @@ class DailyReportScreen extends StatefulWidget {
 }
 
 class _DailyReportScreenState extends State<DailyReportScreen> {
+  final NumberFormat moneyFmt = NumberFormat("#,###");
+  final DateFormat dateFmt = DateFormat("d/M/yyyy");
 
-  List allTx = [];
-  List depositTx = [];
-  List withdrawTx = [];
+  DateTime selectedDate = DateTime.now();
+
+  List<LedgerTx> allTx = [];
+  List<LedgerTx> depositTx = [];
+  List<LedgerTx> withdrawTx = [];
 
   @override
   void initState() {
     super.initState();
-    txStore.load();
+    txStore.load().then((_) {
+      bossStore.load().then((_) {
+        _reloadForSelectedDay();
+      });
+    });
   }
 
+  int _bossOpeningBalance() {
+    try {
+      final b =
+          bossStore.items.firstWhere((x) => (x as dynamic).id == widget.bossId);
+      final v = (b as dynamic).openingBalance;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+    } catch (_) {}
+    return 0;
+  }
+
+  int _balanceBeforeDay(int dayStartMs) {
+    final opening = _bossOpeningBalance();
+
+    final prevAll = txStore.items.where((t) =>
+        t.bossId == widget.bossId && !t.deleted && t.dateMs < dayStartMs);
+
+    final dep = prevAll
+        .where((t) => t.type == "deposit")
+        .fold<int>(0, (s, t) => s + t.totalKs);
+    final wd = prevAll
+        .where((t) => t.type == "withdraw")
+        .fold<int>(0, (s, t) => s + t.totalKs);
+
+    return opening + dep - wd;
+  }
+
+  void _reloadForSelectedDay() {
+    final d = selectedDate;
     final start = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
     final end = start + const Duration(days: 1).inMilliseconds;
 
     allTx = txStore.items
-        .where(
-          (t) =>
-              t.bossId == widget.bossId &&
-              !t.deleted &&
-              t.dateMs >= start &&
-              t.dateMs < end,
-        )
-        .toList();
+        .where((t) =>
+            t.bossId == widget.bossId &&
+            !t.deleted &&
+            t.dateMs >= start &&
+            t.dateMs < end)
+        .toList()
+      ..sort((a, b) => a.seqNo.compareTo(b.seqNo));
 
     depositTx = allTx.where((t) => t.type == "deposit").toList();
     withdrawTx = allTx.where((t) => t.type == "withdraw").toList();
 
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
-
-
-  final NumberFormat moneyFmt = NumberFormat("#,###");
-
-  // TEMP dummy data (နောက်မှ firestore ထဲကယူမယ်)
-  final List<Map<String, dynamic>> deposits = [
-    {"name": "Vis", "desc": "KBZ Pay", "amount": 10000000, "commission": 0},
-  ];
-
-  final List<Map<String, dynamic>> withdraws = [
-    {
-      "name": "Ko Aung",
-      "desc": "Cash Out",
-      "amount": 200000,
-      "commission": 200,
-    },
-    {"name": "Su Su", "desc": "WavePay", "amount": 500000, "commission": 500},
-  ];
-
-  int get depositCount => deposits.length;
-  int get withdrawCount => withdraws.length;
+  int get depositCount => depositTx.length;
+  int get withdrawCount => withdrawTx.length;
   int get totalCount => depositCount + withdrawCount;
 
-  int get totalDeposit => deposits.fold(
-    0,
-    (sum, tx) => sum + (tx["amount"] + tx["commission"]) as int,
-  );
+  int get totalDeposit => depositTx.fold(0, (sum, t) => sum + t.totalKs);
+  int get totalWithdraw => withdrawTx.fold(0, (sum, t) => sum + t.totalKs);
 
-  int get totalWithdraw => withdraws.fold(
-    0,
-    (sum, tx) => sum + (tx["amount"] + tx["commission"]) as int,
-  );
-
-  int get previousBalance => 0;
+  int get previousBalance {
+    final d = selectedDate;
+    final start = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
+    return _balanceBeforeDay(start);
+  }
 
   int get closingBalance => previousBalance + totalDeposit - totalWithdraw;
 
   Future<void> pickDate() async {
     final picked = await showDatePicker(
       context: context,
+      initialDate: selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
 
     if (picked != null) {
+      setState(() => selectedDate = picked);
+      _reloadForSelectedDay();
     }
   }
 
@@ -110,9 +127,28 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     );
   }
 
-  Widget txTable(List<Map<String, dynamic>> list) {
+  Widget _table(List<LedgerTx> list) {
+    if (list.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: const Text("No transactions"),
+      );
+    }
+
+    final headerStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w900,
+      color: Colors.black.withOpacity(0.65),
+    );
+    final cellStyle =
+        const TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -124,21 +160,35 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
           ),
         ],
       ),
-      child: Column(
-        children: list.map((tx) {
-          final total = tx["amount"] + tx["commission"];
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text(tx["name"])),
-                Expanded(child: Text(tx["desc"])),
-                Text(moneyFmt.format(total)),
-              ],
-            ),
-          );
-        }).toList(),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columnSpacing: 14,
+          headingRowHeight: 32,
+          dataRowMinHeight: 36,
+          dataRowMaxHeight: 52,
+          columns: [
+            DataColumn(label: Text("နာမည်", style: headerStyle)),
+            DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle)),
+            DataColumn(
+                label: Text("ငွေပမာဏ", style: headerStyle), numeric: true),
+            DataColumn(
+                label: Text("ကော်မရှင်", style: headerStyle), numeric: true),
+            DataColumn(
+                label: Text("စုစုပေါင်းငွေ", style: headerStyle), numeric: true),
+          ],
+          rows: list.map((t) {
+            return DataRow(cells: [
+              DataCell(Text(t.personName, style: cellStyle)),
+              DataCell(Text(t.description, style: cellStyle)),
+              DataCell(Text(moneyFmt.format(t.amountKs), style: cellStyle)),
+              DataCell(Text(moneyFmt.format(t.commissionKs), style: cellStyle)),
+              DataCell(Text(moneyFmt.format(t.totalKs),
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w900))),
+            ]);
+          }).toList(),
+        ),
       ),
     );
   }
@@ -149,11 +199,11 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label),
+          Expanded(child: Text(label)),
           Text(
             "${moneyFmt.format(value)} MMK",
             style: TextStyle(
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
             ),
           ),
         ],
@@ -174,7 +224,6 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Date Picker
             GestureDetector(
               onTap: pickDate,
               child: Container(
@@ -187,204 +236,55 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
+                      "Date: ${dateFmt.format(selectedDate)}",
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     const Icon(Icons.calendar_month),
                   ],
                 ),
               ),
             ),
-
-            // Deposit
             sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-            txTable(deposits),
-            const SizedBox(height: 10),
-            Text(
-              "+${moneyFmt.format(totalDeposit)} MMK",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.green,
-              ),
-              textAlign: TextAlign.right,
-            ),
-
-            // Withdraw
+            _table(depositTx),
+            const SizedBox(height: 14),
             sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-            txTable(withdraws),
-            const SizedBox(height: 10),
-            Text(
-              "-${moneyFmt.format(totalWithdraw)} MMK",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.red,
-              ),
-              textAlign: TextAlign.right,
-            ),
-
-            const SizedBox(height: 18),
-
-            // Balance Summary
+            _table(withdrawTx),
+            sectionTitle("Summary", const Color(0xFF333333)),
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                    color: Colors.black.withOpacity(0.06),
+                  ),
+                ],
               ),
               child: Column(
                 children: [
-                  summaryRow("Previous Balance (ယခင်လက်ကျန်)", previousBalance),
-                  summaryRow("(+) Total Deposit", totalDeposit),
-                  summaryRow("(-) Total Withdraw", totalWithdraw),
+                  summaryRow("Deposit စောင်ရေ", depositCount),
+                  summaryRow("Withdraw စောင်ရေ", withdrawCount),
+                  summaryRow("Total စောင်ရေ", totalCount, bold: true),
                   const Divider(),
-                  summaryRow(
-                    "Closing Balance (စာရင်းပိတ်ငွေလက်ကျန်)",
-                    closingBalance,
-                    bold: true,
-                  ),
+                  summaryRow("Total Deposit (ဒီနေ့အဝင်)", totalDeposit,
+                      bold: true),
+                  summaryRow("Total Withdraw (ဒီနေ့အထွက်)", totalWithdraw,
+                      bold: true),
+                  const Divider(),
+                  summaryRow("Previous Balance (ယခင်လက်ကျန်)", previousBalance),
+                  summaryRow("Closing Balance (စာရင်းပိတ်ငွေလက်ကျန်)",
+                      closingBalance,
+                      bold: true),
                 ],
               ),
             ),
-
-            const SizedBox(height: 18),
-
-            // Count Summary
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Daily Count Summary",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 10),
-                  Text("Deposit စောင်ရေ ( $depositCount )"),
-                  Text("Withdraw စောင်ရေ ( $withdrawCount )"),
-                  Text("Total စောင်ရေ ( $totalCount )"),
-                ],
-              ),
-            ),
+            const SizedBox(height: 22),
           ],
         ),
       ),
     );
   }
-
-  // ===== Ledger TX Wiring =====
-
-    final dayStart = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
-    final dayEnd = dayStart + Duration(days: 1).inMilliseconds;
-
-        .where(
-          (t) =>
-              t.bossId == widget.bossId &&
-              !t.deleted &&
-              t.dateMs >= dayStart &&
-              t.dateMs < dayEnd,
-        )
-        .toList();
-
-  }
-}
-
-// === TX TABLES ===
-
-Widget _txTable(List<LedgerTx> list, Color color) {
-  return _card(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: const [
-            Expanded(
-              flex: 2,
-              child: Text(
-                "နာမည်",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                "အကြောင်းအရာ",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                "ငွေ",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                "ကော်မရှင်",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-            Expanded(
-              child: Text(
-                "စုစုပေါင်း",
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ),
-        const Divider(),
-        SizedBox(
-          height: 220,
-          child: ListView.builder(
-            itemCount: list.length,
-            itemBuilder: (_, i) {
-              final t = list[i];
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        t.personName,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        t.description,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        _fmt(t.amountKs),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        _fmt(t.commissionKs),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        _fmt(t.totalKs),
-                        style: TextStyle(fontSize: 12, color: color),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    ),
-  );
 }

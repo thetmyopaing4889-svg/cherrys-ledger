@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ledger_tx.dart';
 
 class TxStore extends ChangeNotifier {
+  List<LedgerTx> get items => _txs;
+
   static const _kKey = "cherrys_ledger_transactions_v1";
 
   final List<LedgerTx> _txs = [];
