@@ -15,7 +15,7 @@ class BossDetailScreen extends StatefulWidget {
 
 class _BossDetailScreenState extends State<BossDetailScreen> {
   int _currentBalance(String bossId, int opening) {
-    final all = txStore.items.where((t) => t.bossId == bossId && !t.deleted);
+    final all = txStore.listByBoss(bossId);
     final dep = all.where((t) => t.type == "deposit").fold<int>(0, (s, t) => s + t.totalKs);
     final wd  = all.where((t) => t.type == "withdraw").fold<int>(0, (s, t) => s + t.totalKs);
     return opening + dep - wd;
@@ -109,7 +109,6 @@ class _BossDetailScreenState extends State<BossDetailScreen> {
     final currentBal = _currentBalance(b.id, b.openingBalanceMmk);
     final bigBal = formatMMK(currentBal);
 
-    final openingBal = formatMMK(b.openingBalanceMmk);
 
     return Scaffold(
       appBar: AppBar(
@@ -188,7 +187,6 @@ class _BossDetailScreenState extends State<BossDetailScreen> {
               value: b.address.isEmpty ? "-" : b.address,
             ),
             const SizedBox(height: 10),
-            _InfoTile(label: "Opening Balance", value: openingBal),
 
             const SizedBox(height: 16),
 
