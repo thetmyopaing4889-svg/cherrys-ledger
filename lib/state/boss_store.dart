@@ -11,6 +11,7 @@ class BossStore extends ChangeNotifier {
 
   bool get isLoaded => _loaded;
   List<Boss> get bosses => List.unmodifiable(_bosses);
+  List<Boss> get items => List.unmodifiable(_bosses);
 
   Future<void> load() async {
     if (_loaded) return;
