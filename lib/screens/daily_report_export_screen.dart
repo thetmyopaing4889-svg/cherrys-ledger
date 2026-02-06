@@ -432,8 +432,69 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       ),
       body: PageView.builder(
         itemCount: _pageCount,
-        itemBuilder: (_, i) => _page(i),
+        itemBuilder: (_, i) {
+            final page = _page(i);
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: RepeatingWatermark("CHERRY’S LEDGER"),
+                  ),
+                ),
+                Positioned.fill(child: page),
+              ],
+            );
+          },
       ),
     );
+  }
+}
+
+// --- repeating watermark painter (export only) ---
+class RepeatingWatermark extends CustomPainter {
+  final String text;
+  RepeatingWatermark(this.text);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFF000000).withOpacity(0.05);
+
+    // draw repeated rotated text
+    const angle = -0.35; // ~ -20 degrees
+    canvas.save();
+    canvas.translate(size.width / 2, size.height / 2);
+    canvas.rotate(angle);
+    canvas.translate(-size.width / 2, -size.height / 2);
+
+    final tp = TextPainter(
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+
+    // small repeating text
+    final style = TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w800,
+      foreground: paint,
+      letterSpacing: 1.0,
+    );
+
+    const stepX = 220.0;
+    const stepY = 120.0;
+
+    for (double y = -size.height; y < size.height * 2; y += stepY) {
+      for (double x = -size.width; x < size.width * 2; x += stepX) {
+        tp.text = TextSpan(text: text, style: style);
+        tp.layout();
+        tp.paint(canvas, Offset(x, y));
+      }
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant RepeatingWatermark oldDelegate) {
+    return oldDelegate.text != text;
   }
 }
