@@ -2,6 +2,7 @@ import "../main.dart";
 import "../models/ledger_tx.dart";
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'daily_report_export_screen.dart';
 
 class DailyReportScreen extends StatefulWidget {
   final String bossId;
@@ -354,7 +355,32 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
               ),
             ),
 
-            const SizedBox(height: 22),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => DailyReportExportScreen(
+                          bossName: widget.bossName,
+                          date: selectedDate,
+                          depositTx: depositTx,
+                          withdrawTx: withdrawTx,
+                          previousBalance: previousBalance,
+                          totalDeposit: totalDeposit,
+                          subTotal: subTotal,
+                          totalWithdraw: totalWithdraw,
+                          closingBalance: closingBalance,
+                        ),
+                      ),
+                    );
+                    },
+                  icon: const Icon(Icons.ios_share),
+                  label: const Text("Export (JPEG / Excel)"),
+                ),
+              ),
+              const SizedBox(height: 22),
           ],
         ),
       ),
