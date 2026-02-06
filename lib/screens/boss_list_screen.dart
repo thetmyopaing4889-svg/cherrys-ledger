@@ -19,12 +19,15 @@ class _BossListScreenState extends State<BossListScreen> {
   void initState() {
     super.initState();
     bossStore.load();
+    txStore.load();
     bossStore.addListener(_onStore);
+    txStore.addListener(_onStore);
   }
 
   @override
   void dispose() {
     bossStore.removeListener(_onStore);
+    txStore.removeListener(_onStore);
     super.dispose();
   }
 
@@ -41,11 +44,19 @@ class _BossListScreenState extends State<BossListScreen> {
     return "${out.toString()} MMK";
   }
 
+  int _currentBalance(String bossId, int opening) {
+    final all = txStore.listByBoss(bossId);
+    final dep =
+        all.where((t) => t.type == "deposit").fold<int>(0, (s, t) => s + t.totalKs);
+    final wd =
+        all.where((t) => t.type == "withdraw").fold<int>(0, (s, t) => s + t.totalKs);
+    return opening + dep - wd;
+  }
+
   Future<void> _openAddBoss({Boss? edit}) async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => AddBossScreen(editBoss: edit)));
-    // store notifies, UI updates automatically
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => AddBossScreen(editBoss: edit)),
+    );
   }
 
   @override
@@ -89,26 +100,28 @@ class _BossListScreenState extends State<BossListScreen> {
               child: !bossStore.isLoaded
                   ? const Center(child: CircularProgressIndicator())
                   : bosses.isEmpty
-                  ? _EmptyState()
-                  : ListView.separated(
-                      itemCount: bosses.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (_, i) {
-                        final b = bosses[i];
-                        final bigBal = formatMMK(b.openingBalanceMmk);
-                        return _BossCard(
-                          title: "${b.name} (${b.country})",
-                          balance: bigBal,
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => BossDetailScreen(bossId: b.id),
-                              ),
+                      ? _EmptyState()
+                      : ListView.separated(
+                          itemCount: bosses.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (_, i) {
+                            final b = bosses[i];
+                            final bigBal = formatMMK(
+                              _currentBalance(b.id, b.openingBalanceMmk),
+                            );
+                            return _BossCard(
+                              title: "${b.name} (${b.country})",
+                              balance: bigBal,
+                              onTap: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => BossDetailScreen(bossId: b.id),
+                                  ),
+                                );
+                              },
                             );
                           },
-                        );
-                      },
-                    ),
+                        ),
             ),
           ],
         ),
@@ -216,29 +229,16 @@ class _EmptyState extends StatelessWidget {
                 color: Colors.black54,
               ),
             ),
-            SizedBox(height: 12),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: Color(0xFFFFEEF5),
-                borderRadius: BorderRadius.all(Radius.circular(18)),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Text(
-                  "Tip: Create Boss → Add Transactions → Reports",
-                  style: TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF9F1239),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 }
+
+// NOTE: _BossCard widget ကို မင်း project ထဲမှာ အောက်ပိုင်းမှာရှိပြီးသားဖြစ်တာများလို့
+// ဒီ file ကို overwrite လုပ်လို့ _BossCard class မရှိရင် build error တက်မယ်။
+// အဲ့လိုဖြစ်ရင် _BossCard ရှိတဲ့ code ကို ဒီ file အောက်ဆုံးမှာ ပြန်ထည့်ရမယ်။
 
 class _BossCard extends StatelessWidget {
   static const _cherry = Color(0xFFFF2D55);
