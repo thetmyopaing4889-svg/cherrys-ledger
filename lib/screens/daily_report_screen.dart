@@ -328,6 +328,7 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                 children: [
                   summaryRow("Previous Balance (ယခင်လက်ကျန်)", previousBalance),
                   summaryRow("Total Deposit (ဒီနေ့အဝင်)", totalDeposit),
+                    const Divider(),
                   summaryRow("Sub Total", subTotal, bold: true),
                   summaryRow("Total Withdraw (ဒီနေ့အထွက်)", totalWithdraw),
                   const Divider(),
@@ -346,9 +347,9 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
             _card(
               Column(
                 children: [
-                  summaryRow("Deposit စောင်ရေ", depositCount),
-                  summaryRow("Withdraw စောင်ရေ", withdrawCount),
-                  summaryRow("Total စောင်ရေ", totalCount, bold: true),
+                  summaryRow("Deposit စောင်ရေ", depositCount, money: false),
+                  summaryRow("Withdraw စောင်ရေ", withdrawCount, money: false),
+                  summaryRow("Total စောင်ရေ", totalCount, bold: true, money: false),
                 ],
               ),
             ),
