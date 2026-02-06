@@ -328,6 +328,7 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                 children: [
                   summaryRow("Previous Balance (ယခင်လက်ကျန်)", previousBalance),
                   summaryRow("Total Deposit (ဒီနေ့အဝင်)", totalDeposit),
+                    const Divider(),
                   summaryRow("Sub Total", subTotal, bold: true),
                   summaryRow("Total Withdraw (ဒီနေ့အထွက်)", totalWithdraw),
                   const Divider(),
@@ -369,7 +370,7 @@ Widget _countRow(String label, int value, {bool bold = false}) {
       children: [
         Expanded(child: Text(label)),
         Text(
-          value.toString(),
+          "$value စောင်",
           style: TextStyle(
             fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
           ),
