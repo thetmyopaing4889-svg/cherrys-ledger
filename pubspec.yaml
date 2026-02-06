@@ -34,9 +34,7 @@ dependencies:
   share_plus: ^10.0.2
   cross_file: ^0.3.4+2
   excel: ^4.0.6
-  share_plus: ^10.0.2
   cross_file: ^0.3.4+2
-  excel: ^4.0.6
 
 flutter:
   uses-material-design: true
