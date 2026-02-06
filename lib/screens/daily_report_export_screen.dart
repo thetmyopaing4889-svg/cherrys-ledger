@@ -7,6 +7,7 @@ import 'package:cross_file/cross_file.dart';
 import 'package:excel/excel.dart' as xls;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -47,16 +48,16 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
   bool _exporting = false;
 
-  String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
+  // phone full-screen pages
+  static const int _rowsPerPage = 10;
+
+  String _safeName(String s) => s.replaceAll(RegExp(r"[^A-Za-z0-9_\-]+"), "_");
 
   String _ymd(DateTime d) {
-    final mm = d.month.toString().padLeft(2, '0');
-    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, "0");
+    final dd = d.day.toString().padLeft(2, "0");
     return "${d.year}-$mm-$dd";
   }
-
-  // full-screen pages: deposit pages + withdraw pages + summary page
-  static const int _rowsPerPage = 10;
 
   List<List<LedgerTx>> _chunk(List<LedgerTx> list) {
     if (list.isEmpty) return const [];
@@ -72,31 +73,26 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
   int get _depCount => _depPages.isEmpty ? 1 : _depPages.length;
   int get _wdCount => _wdPages.isEmpty ? 1 : _wdPages.length;
+  int get _pageCount => _depCount + _wdCount + 1; // + summary
 
-  int get _pageCount => _depCount + _wdCount + 1; // + summary page
+  bool _isDepositPage(int idx) => idx < _depCount;
+  bool _isWithdrawPage(int idx) => idx >= _depCount && idx < (_depCount + _wdCount);
+  bool _isSummaryPage(int idx) => idx == _pageCount - 1;
 
-  bool _isDepositPage(int pageIndex) => pageIndex < _depCount;
-
-  bool _isWithdrawPage(int pageIndex) => pageIndex >= _depCount && pageIndex < _depCount + _wdCount;
-
-  bool _isSummaryPage(int pageIndex) => pageIndex == _pageCount - 1;
-
-  List<LedgerTx> _depositSliceFor(int pageIndex) {
+  List<LedgerTx> _depositSliceFor(int idx) {
     if (_depPages.isEmpty) return const [];
-    return _depPages[pageIndex];
+    return _depPages[idx];
   }
 
-  List<LedgerTx> _withdrawSliceFor(int pageIndex) {
+  List<LedgerTx> _withdrawSliceFor(int idx) {
     if (_wdPages.isEmpty) return const [];
-    return _wdPages[pageIndex - _depCount];
+    return _wdPages[idx - _depCount];
   }
 
-  final PageController _pc = PageController();
-  int _currentPage = 0;
+  late final PageController _pageCtrl = PageController();
+  late final List<GlobalKey> _pageKeys = List.generate(_pageCount, (_) => GlobalKey());
 
-  late final List<GlobalKey> _pageKeys =
-      List.generate(_pageCount, (_) => GlobalKey());
-
+  // ---------- UI blocks ----------
   Widget _watermark() {
     return IgnorePointer(
       child: Center(
@@ -108,7 +104,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
               "CHERRY’S LEDGER",
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 44,
+                fontSize: 46,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 2.0,
                 color: Colors.black,
@@ -172,63 +168,40 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     );
     const cellStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
 
-    final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
-    final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
-    final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
-
-    Widget totalRow() {
-      const bold = TextStyle(fontSize: 12, fontWeight: FontWeight.w900);
-      return Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFF6F8),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFFFCFE0)),
-          ),
-          child: Row(
-            children: [
-              const Expanded(flex: 2, child: Text("Total", style: bold)),
-              Expanded(
-                flex: 2,
-                child: Text(_moneyFmt.format(amountSum),
-                    style: bold, textAlign: TextAlign.right),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(_moneyFmt.format(commSum),
-                    style: bold, textAlign: TextAlign.right),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(_moneyFmt.format(totalSum),
-                    style: bold, textAlign: TextAlign.right),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     if (list.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFFFCFE0)),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 10,
+              offset: const Offset(0, 6),
+              color: Colors.black.withOpacity(0.06),
+            ),
+          ],
         ),
         child: const Text("No transactions"),
       );
     }
+
+    final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
+    final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
+    final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
 
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFCFE0)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.06),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -253,16 +226,39 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
                     DataCell(Text(t.description, style: cellStyle)),
                     DataCell(Text(_moneyFmt.format(t.amountKs), style: cellStyle)),
                     DataCell(Text(_moneyFmt.format(t.commissionKs), style: cellStyle)),
-                    DataCell(Text(
-                      _moneyFmt.format(t.totalKs),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
-                    )),
+                    DataCell(
+                      Text(
+                        _moneyFmt.format(t.totalKs),
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+                      ),
+                    ),
                   ],
                 );
               }).toList(),
             ),
           ),
-          totalRow(),
+          const SizedBox(height: 8),
+          _totalRow(amountSum, commSum, totalSum),
+        ],
+      ),
+    );
+  }
+
+  Widget _totalRow(int amountSum, int commSum, int totalSum) {
+    const bold = TextStyle(fontSize: 12, fontWeight: FontWeight.w900);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF6F8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFFCFE0)),
+      ),
+      child: Row(
+        children: [
+          const Expanded(flex: 2, child: Text("Total", style: bold)),
+          Expanded(flex: 2, child: Text(_moneyFmt.format(amountSum), style: bold, textAlign: TextAlign.right)),
+          Expanded(flex: 2, child: Text(_moneyFmt.format(commSum), style: bold, textAlign: TextAlign.right)),
+          Expanded(flex: 2, child: Text(_moneyFmt.format(totalSum), style: bold, textAlign: TextAlign.right)),
         ],
       ),
     );
@@ -276,12 +272,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(child: Text(label)),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
-              ),
-            ),
+            Text(value, style: TextStyle(fontWeight: bold ? FontWeight.w900 : FontWeight.w700)),
           ],
         ),
       );
@@ -292,7 +283,13 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFCFE0)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.06),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -308,39 +305,62 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     );
   }
 
-  Future<XFile> _capturePageToFile(int pageIndex) async {
-    await WidgetsBinding.instance.endOfFrame;
+  // ---------- export helpers ----------
+  Future<File> _writeJpgFromBoundary(GlobalKey key, String path) async {
+    final boundary = key.currentContext!.findRenderObject() as RenderRepaintBoundary;
 
-    final boundary = _pageKeys[pageIndex].currentContext!.findRenderObject() as RenderRepaintBoundary;
-    final image = await boundary.toImage(pixelRatio: 3.0);
+    // higher quality for messenger (still phone full-screen)
+    final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
     final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    final bytes = byteData!.buffer.asUint8List();
+    final pngBytes = byteData!.buffer.asUint8List();
 
-    final dir = await getTemporaryDirectory();
-    final boss = _safeName(widget.bossName);
-    final date = _ymd(widget.date);
-    final p = pageIndex + 1;
-    final n = _pageCount;
+    final decoded = img.decodeImage(pngBytes);
+    if (decoded == null) {
+      // fallback to png
+      final f = File(path.replaceAll(".jpg", ".png"));
+      await f.writeAsBytes(pngBytes, flush: true);
+      return f;
+    }
 
-    final file = File("${dir.path}/${boss}_${date}_daily_p${p}of${n}.png");
-    await file.writeAsBytes(bytes, flush: true);
-    return XFile(file.path);
+    final jpgBytes = img.encodeJpg(decoded, quality: 92);
+    final f = File(path);
+    await f.writeAsBytes(jpgBytes, flush: true);
+    return f;
+  }
+
+  Future<List<XFile>> _exportAllPagesAsJpeg() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final base = "DailyReport_${_safeName(widget.bossName)}_${_ymd(widget.date)}";
+    final out = <XFile>[];
+
+    for (int i = 0; i < _pageCount; i++) {
+      // make sure page is visible before capture
+      await _pageCtrl.animateToPage(i, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+      await Future.delayed(const Duration(milliseconds: 260));
+
+      final p = (i + 1).toString().padLeft(2, "0");
+      final n = _pageCount.toString().padLeft(2, "0");
+      final path = "${dir.path}/${base}_p${p}of${n}.jpg";
+
+      final file = await _writeJpgFromBoundary(_pageKeys[i], path);
+      out.add(XFile(file.path));
+    }
+    return out;
   }
 
   Future<XFile> _exportExcel() async {
     final excel = xls.Excel.createExcel();
     final sheet = excel["DailyReport"];
 
-    final d = widget.date;
     sheet.appendRow([xls.TextCellValue("Cherry’s Ledger")]);
     sheet.appendRow([xls.TextCellValue("Boss"), xls.TextCellValue(widget.bossName)]);
-    sheet.appendRow([xls.TextCellValue("Date"), xls.TextCellValue("${d.year}-${d.month}-${d.day}")]);
+    sheet.appendRow([xls.TextCellValue("Date"), xls.TextCellValue(_ymd(widget.date))]);
     sheet.appendRow([xls.TextCellValue("")]);
 
     sheet.appendRow([
       xls.TextCellValue("DEPOSIT"),
-      xls.TextCellValue("နာမည်"),
-      xls.TextCellValue("အကြောင်းအရာ"),
+      xls.TextCellValue("Name"),
+      xls.TextCellValue("Description"),
       xls.TextCellValue("Amount"),
       xls.TextCellValue("Commission"),
       xls.TextCellValue("Total"),
@@ -355,12 +375,12 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
         xls.IntCellValue(t.totalKs),
       ]);
     }
-    sheet.appendRow([xls.TextCellValue("")]);
 
+    sheet.appendRow([xls.TextCellValue("")]);
     sheet.appendRow([
       xls.TextCellValue("WITHDRAW"),
-      xls.TextCellValue("နာမည်"),
-      xls.TextCellValue("အကြောင်းအရာ"),
+      xls.TextCellValue("Name"),
+      xls.TextCellValue("Description"),
       xls.TextCellValue("Amount"),
       xls.TextCellValue("Commission"),
       xls.TextCellValue("Total"),
@@ -375,53 +395,85 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
         xls.IntCellValue(t.totalKs),
       ]);
     }
-    sheet.appendRow([xls.TextCellValue("")]);
 
-    sheet.appendRow([xls.TextCellValue("SUMMARY")]);
-    sheet.appendRow([xls.TextCellValue("PreviousBalance"), xls.IntCellValue(widget.previousBalance)]);
-    sheet.appendRow([xls.TextCellValue("TotalDeposit"), xls.IntCellValue(widget.totalDeposit)]);
-    sheet.appendRow([xls.TextCellValue("SubTotal"), xls.IntCellValue(widget.subTotal)]);
-    sheet.appendRow([xls.TextCellValue("TotalWithdraw"), xls.IntCellValue(widget.totalWithdraw)]);
-    sheet.appendRow([xls.TextCellValue("ClosingBalance"), xls.IntCellValue(widget.closingBalance)]);
+    sheet.appendRow([xls.TextCellValue("")]);
+    sheet.appendRow([xls.TextCellValue("Summary"), xls.TextCellValue("Previous"), xls.IntCellValue(widget.previousBalance)]);
+    sheet.appendRow([xls.TextCellValue("Summary"), xls.TextCellValue("Deposit"), xls.IntCellValue(widget.totalDeposit)]);
+    sheet.appendRow([xls.TextCellValue("Summary"), xls.TextCellValue("SubTotal"), xls.IntCellValue(widget.subTotal)]);
+    sheet.appendRow([xls.TextCellValue("Summary"), xls.TextCellValue("Withdraw"), xls.IntCellValue(widget.totalWithdraw)]);
+    sheet.appendRow([xls.TextCellValue("Summary"), xls.TextCellValue("Closing"), xls.IntCellValue(widget.closingBalance)]);
 
     final bytes = excel.encode()!;
-    final dir = await getTemporaryDirectory();
-    final boss = _safeName(widget.bossName);
-    final date = _ymd(widget.date);
-    final file = File("${dir.path}/${boss}_${date}_daily.xlsx");
-    await file.writeAsBytes(bytes, flush: true);
-    return XFile(file.path);
+    final dir = await getApplicationDocumentsDirectory();
+    final path = "${dir.path}/DailyReport_${_safeName(widget.bossName)}_${_ymd(widget.date)}.xlsx";
+    final f = File(path);
+    await f.writeAsBytes(bytes, flush: true);
+    return XFile(f.path);
   }
 
-  Future<void> _shareAllPagesAsJpeg() async {
+  Future<void> _showExportSheet() async {
     if (_exporting) return;
-    setState(() => _exporting = true);
-    try {
-      final files = <XFile>[];
-      for (int i = 0; i < _pageCount; i++) {
-        // jump to page so it renders
-        await _pc.animateToPage(i, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
-        await Future<void>.delayed(const Duration(milliseconds: 120));
-        files.add(await _capturePageToFile(i));
-      }
-      await Share.shareXFiles(files, text: "${widget.bossName} Daily Report (${_dateFmt.format(widget.date)})");
-    } finally {
-      if (mounted) setState(() => _exporting = false);
-    }
+
+    await showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.image),
+                title: const Text("Export JPEG (Multi-page)"),
+                onTap: () async {
+                  Navigator.pop(context);
+                  setState(() => _exporting = true);
+                  try {
+                    final files = await _exportAllPagesAsJpeg();
+                    await Share.shareXFiles(files, text: "${widget.bossName} Daily Report ${_ymd(widget.date)}");
+                  } finally {
+                    if (mounted) setState(() => _exporting = false);
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.table_chart),
+                title: const Text("Export Excel"),
+                onTap: () async {
+                  Navigator.pop(context);
+                  setState(() => _exporting = true);
+                  try {
+                    final file = await _exportExcel();
+                    await Share.shareXFiles([file], text: "${widget.bossName} Daily Report ${_ymd(widget.date)}");
+                  } finally {
+                    if (mounted) setState(() => _exporting = false);
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.ios_share),
+                title: const Text("Export Both (JPEG + Excel)"),
+                onTap: () async {
+                  Navigator.pop(context);
+                  setState(() => _exporting = true);
+                  try {
+                    final imgs = await _exportAllPagesAsJpeg();
+                    final xlsx = await _exportExcel();
+                    await Share.shareXFiles([...imgs, xlsx], text: "${widget.bossName} Daily Report ${_ymd(widget.date)}");
+                  } finally {
+                    if (mounted) setState(() => _exporting = false);
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
   }
 
-  Future<void> _shareExcel() async {
-    if (_exporting) return;
-    setState(() => _exporting = true);
-    try {
-      final xfile = await _exportExcel();
-      await Share.shareXFiles([xfile], text: "${widget.bossName} Daily Report (${_dateFmt.format(widget.date)})");
-    } finally {
-      if (mounted) setState(() => _exporting = false);
-    }
-  }
-
-  Widget _pageContainer({required Widget child, required int pageIndex}) {
+  Widget _pageContainer({required int pageIndex, required Widget child}) {
     return RepaintBoundary(
       key: _pageKeys[pageIndex],
       child: Container(
@@ -436,16 +488,12 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
                 children: [
                   _header(),
                   Expanded(child: child),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerRight,
                     child: Text(
-                      "Page ${pageIndex + 1} / $_pageCount",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black.withOpacity(0.55),
-                      ),
+                      "Page ${pageIndex + 1}/$_pageCount",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.black.withOpacity(0.55)),
                     ),
                   ),
                 ],
@@ -457,87 +505,50 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     );
   }
 
-  Widget _buildPage(int pageIndex) {
-    if (_isDepositPage(pageIndex)) {
-      final slice = _depositSliceFor(pageIndex);
-      return _pageContainer(
-        pageIndex: pageIndex,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-              _table(slice),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_isWithdrawPage(pageIndex)) {
-      final slice = _withdrawSliceFor(pageIndex);
-      return _pageContainer(
-        pageIndex: pageIndex,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-              _table(slice),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // summary page
+  Widget _buildDepositPage(int idx) {
+    final slice = _depositSliceFor(idx);
     return _pageContainer(
-      pageIndex: pageIndex,
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionTitle("Summary", const Color(0xFF333333)),
-            _summaryCard(),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0xFFFFCFE0)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(child: Text("Deposit စောင်ရေ")),
-                      Text("${widget.depositTx.length} စောင်", style: const TextStyle(fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(child: Text("Withdraw စောင်ရေ")),
-                      Text("${widget.withdrawTx.length} စောင်", style: const TextStyle(fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Expanded(child: Text("Total စောင်ရေ")),
-                      Text("${widget.depositTx.length + widget.withdrawTx.length} စောင်",
-                          style: const TextStyle(fontWeight: FontWeight.w900)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      pageIndex: idx,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
+          _table(slice),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWithdrawPage(int idx) {
+    final slice = _withdrawSliceFor(idx);
+    return _pageContainer(
+      pageIndex: idx,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
+          _table(slice),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryPage(int idx) {
+    return _pageContainer(
+      pageIndex: idx,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionTitle("Summary", const Color(0xFF333333)),
+          _summaryCard(),
+          const SizedBox(height: 12),
+          Text(
+            "Deposit စောင်ရေ: ${widget.depositTx.length} စောင်\n"
+            "Withdraw စောင်ရေ: ${widget.withdrawTx.length} စောင်\n"
+            "Total စောင်ရေ: ${widget.depositTx.length + widget.withdrawTx.length} စောင်",
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+          ),
+        ],
       ),
     );
   }
@@ -547,56 +558,25 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF6F8),
       appBar: AppBar(
-        title: Text("${widget.bossName} Export Preview"),
+        title: Text("${widget.bossName} Export"),
         backgroundColor: Colors.white,
         actions: [
           IconButton(
-            tooltip: "Share JPEG (all pages)",
-            onPressed: _exporting ? null : _shareAllPagesAsJpeg,
-            icon: const Icon(Icons.image),
+            onPressed: _exporting ? null : _showExportSheet,
+            icon: _exporting
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.ios_share),
           ),
-          IconButton(
-            tooltip: "Share Excel",
-            onPressed: _exporting ? null : _shareExcel,
-            icon: const Icon(Icons.table_chart),
-          ),
-          const SizedBox(width: 6),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: PageView.builder(
-              controller: _pc,
-              itemCount: _pageCount,
-              onPageChanged: (i) => setState(() => _currentPage = i),
-              itemBuilder: (_, i) => _buildPage(i),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            color: Colors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
-                    icon: const Icon(Icons.ios_share),
-                    label: Text(_exporting ? "Exporting..." : "Share JPEG (All Pages)"),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _exporting ? null : _shareExcel,
-                    icon: const Icon(Icons.table_chart),
-                    label: const Text("Share Excel"),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      body: PageView.builder(
+        controller: _pageCtrl,
+        itemCount: _pageCount,
+        itemBuilder: (_, idx) {
+          if (_isDepositPage(idx)) return _buildDepositPage(idx);
+          if (_isWithdrawPage(idx)) return _buildWithdrawPage(idx);
+          return _buildSummaryPage(idx);
+        },
       ),
     );
   }
