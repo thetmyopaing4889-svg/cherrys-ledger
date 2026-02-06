@@ -1,6 +1,12 @@
 import "../main.dart";
 import "../models/ledger_tx.dart";
 import 'package:flutter/material.dart';
+import "dart:io";
+import "dart:ui" as ui;
+import "package:flutter/rendering.dart";
+import "package:path_provider/path_provider.dart";
+import "package:share_plus/share_plus.dart";
+import "package:excel/excel.dart";
 import 'package:intl/intl.dart';
 
 class DailyReportScreen extends StatefulWidget {
@@ -18,6 +24,97 @@ class DailyReportScreen extends StatefulWidget {
 }
 
 class _DailyReportScreenState extends State<DailyReportScreen> {
+  final GlobalKey _captureKey = GlobalKey();
+  bool _exporting = false;
+
+  String _safeName(String s) => s.replaceAll(RegExp(r"[^A-Za-z0-9_\-]+"), "_");
+
+  Future<XFile> _exportJpeg() async {
+    final boundary = _captureKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    final bytes = byteData!.buffer.asUint8List();
+    final dir = await getTemporaryDirectory();
+    final d = selectedDate;
+    final file = File("${dir.path}/${_safeName(widget.bossName)}_${d.year}-${d.month}-${d.day}_daily.png");
+    await file.writeAsBytes(bytes, flush: true);
+    return XFile(file.path);
+  }
+
+  Future<XFile> _exportExcel() async {
+    final excel = Excel.createExcel();
+    final sheet = excel["DailyReport"];
+    final d = selectedDate;
+    sheet.appendRow([TextCellValue("Boss"), TextCellValue(widget.bossName)]);
+    sheet.appendRow([TextCellValue("Date"), TextCellValue("${d.year}-${d.month}-${d.day}")]);
+    sheet.appendRow([TextCellValue(""), TextCellValue("")]);
+    sheet.appendRow([TextCellValue("DEPOSIT"), TextCellValue("Account"), TextCellValue("Amount"), TextCellValue("Commission"), TextCellValue("Total")]);
+    for (final t in depositTx) {
+      sheet.appendRow([TextCellValue("D"), TextCellValue(t.accountName), IntCellValue(t.amountKs), IntCellValue(t.commissionKs), IntCellValue(t.totalKs)]);
+    }
+    sheet.appendRow([TextCellValue(""), TextCellValue("Total"), IntCellValue(totalDeposit)]);
+    sheet.appendRow([TextCellValue(""), TextCellValue("")]);
+    sheet.appendRow([TextCellValue("WITHDRAW"), TextCellValue("Account"), TextCellValue("Amount"), TextCellValue("Commission"), TextCellValue("Total")]);
+    for (final t in withdrawTx) {
+      sheet.appendRow([TextCellValue("W"), TextCellValue(t.accountName), IntCellValue(t.amountKs), IntCellValue(t.commissionKs), IntCellValue(t.totalKs)]);
+    }
+    sheet.appendRow([TextCellValue(""), TextCellValue("Total"), IntCellValue(totalWithdraw)]);
+    sheet.appendRow([TextCellValue(""), TextCellValue("")]);
+    sheet.appendRow([TextCellValue("Summary"), TextCellValue("Previous"), IntCellValue(previousBalance)]);
+    sheet.appendRow([TextCellValue("Summary"), TextCellValue("Deposit"), IntCellValue(totalDeposit)]);
+    sheet.appendRow([TextCellValue("Summary"), TextCellValue("SubTotal"), IntCellValue(subTotal)]);
+    sheet.appendRow([TextCellValue("Summary"), TextCellValue("Withdraw"), IntCellValue(totalWithdraw)]);
+    sheet.appendRow([TextCellValue("Summary"), TextCellValue("Closing"), IntCellValue(closingBalance)]);
+    final bytes = excel.encode()!;
+    final dir = await getTemporaryDirectory();
+    final file = File("${dir.path}/${_safeName(widget.bossName)}_${d.year}-${d.month}-${d.day}_daily.xlsx");
+    await file.writeAsBytes(bytes, flush: true);
+    return XFile(file.path);
+  }
+
+  Future<void> _showExport() async {
+    if (_exporting) return;
+    await showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) {
+        return SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.image),
+              title: const Text("Export JPEG"),
+              onTap: () async {
+                Navigator.pop(context);
+                setState(() => _exporting = true);
+                try {
+                  final img = await _exportJpeg();
+                  await Share.shareXFiles([img], text: "${widget.bossName} Daily Report");
+                } finally {
+                  if (mounted) setState(() => _exporting = false);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.table_chart),
+              title: const Text("Export Excel"),
+              onTap: () async {
+                Navigator.pop(context);
+                setState(() => _exporting = true);
+                try {
+                  final xlsx = await _exportExcel();
+                  await Share.shareXFiles([xlsx], text: "${widget.bossName} Daily Report");
+                } finally {
+                  if (mounted) setState(() => _exporting = false);
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+          ]),
+        );
+      },
+    );
+  }
+
   final NumberFormat moneyFmt = NumberFormat("#,###");
   final DateFormat dateFmt = DateFormat("d/M/yyyy");
 
@@ -241,7 +338,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     );
   }
 
-  Widget summaryRow(String label, int value, {bool bold = false}) {
+  Widget summaryRow(String label, int value, {bool bold = false, bool money = true}) {
+      final text = money ? text : value.toString();
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -249,7 +347,7 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
         children: [
           Expanded(child: Text(label)),
           Text(
-            "${moneyFmt.format(value)} MMK",
+            text,
             style: TextStyle(
               fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
             ),
@@ -282,10 +380,18 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFF6F8),
       appBar: AppBar(
-        title: Text("${widget.bossName} Daily Report"),
-        backgroundColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
+          title: Text(" Daily Report"),
+          backgroundColor: Colors.white,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.ios_share),
+              onPressed: _exporting ? null : _showExport,
+            ),
+          ],
+        ),
+      body: RepaintBoundary(
+          key: _captureKey,
+          child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,6 +434,7 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                 children: [
                   summaryRow("Previous Balance (ယခင်လက်ကျန်)", previousBalance),
                   summaryRow("Total Deposit (ဒီနေ့အဝင်)", totalDeposit),
+                    const Divider(),
                     const Divider(),
                   summaryRow("Sub Total", subTotal, bold: true),
                   summaryRow("Total Withdraw (ဒီနေ့အထွက်)", totalWithdraw),
