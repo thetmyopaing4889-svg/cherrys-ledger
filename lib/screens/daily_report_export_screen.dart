@@ -4,15 +4,11 @@ import 'dart:ui' as ui;
 
 import 'package:cherrys_ledger/models/ledger_tx.dart';
 import 'package:cross_file/cross_file.dart';
-<<<<<<< HEAD
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-=======
 import 'package:excel/excel.dart' as xls;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:image/image.dart' as img;
->>>>>>> feature/export-daily-jpeg
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -53,7 +49,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
   bool _exporting = false;
 
-<<<<<<< HEAD
   // tune for phone screen
   static const int _rowsPerPage = 10;
 
@@ -62,7 +57,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   String _ymd(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
-=======
   // phone full-screen pages
   static const int _rowsPerPage = 10;
 
@@ -71,7 +65,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   String _ymd(DateTime d) {
     final mm = d.month.toString().padLeft(2, "0");
     final dd = d.day.toString().padLeft(2, "0");
->>>>>>> feature/export-daily-jpeg
     return "${d.year}-$mm-$dd";
   }
 
@@ -91,7 +84,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   int get _wdCount => _wdPages.isEmpty ? 1 : _wdPages.length;
   int get _pageCount => _depCount + _wdCount + 1; // + summary
 
-<<<<<<< HEAD
   bool _isDepositPage(int i) => i < _depCount;
   bool _isWithdrawPage(int i) => i >= _depCount && i < _depCount + _wdCount;
   bool _isSummaryPage(int i) => i == _pageCount - 1;
@@ -110,7 +102,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     }
   }
 
-=======
   bool _isDepositPage(int idx) => idx < _depCount;
   bool _isWithdrawPage(int idx) => idx >= _depCount && idx < (_depCount + _wdCount);
   bool _isSummaryPage(int idx) => idx == _pageCount - 1;
@@ -129,7 +120,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   late final List<GlobalKey> _pageKeys = List.generate(_pageCount, (_) => GlobalKey());
 
   // ---------- UI blocks ----------
->>>>>>> feature/export-daily-jpeg
   Widget _watermark() {
     return IgnorePointer(
       child: Center(
@@ -138,17 +128,14 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
           child: Opacity(
             opacity: 0.07,
             child: Text(
-<<<<<<< HEAD
               "CHERRY'S LEDGER",
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 44,
-=======
               "CHERRY’S LEDGER",
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 46,
->>>>>>> feature/export-daily-jpeg
                 fontWeight: FontWeight.w900,
                 letterSpacing: 2.0,
                 color: Colors.black,
@@ -160,7 +147,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     );
   }
 
-<<<<<<< HEAD
   Widget _header({required int pageIndex}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,7 +154,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
         const SizedBox(height: 8),
         const Text(
           "Cherry's Ledger",
-=======
   Widget _header() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,7 +161,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
         const SizedBox(height: 10),
         const Text(
           "Cherry’s Ledger",
->>>>>>> feature/export-daily-jpeg
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.w900,
@@ -193,14 +177,11 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
           "Boss: ${widget.bossName}",
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
         ),
-<<<<<<< HEAD
         const SizedBox(height: 2),
         Text(
           "Page ${pageIndex + 1} / $_pageCount",
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black.withOpacity(0.65)),
         ),
-=======
->>>>>>> feature/export-daily-jpeg
         const SizedBox(height: 10),
         Container(height: 1, color: Colors.black.withOpacity(0.12)),
         const SizedBox(height: 10),
@@ -213,21 +194,17 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       padding: const EdgeInsets.only(top: 6, bottom: 8),
       child: Text(
         text,
-<<<<<<< HEAD
         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: color),
-=======
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w900,
           color: color,
         ),
->>>>>>> feature/export-daily-jpeg
       ),
     );
   }
 
   Widget _table(List<LedgerTx> list) {
-<<<<<<< HEAD
     final headerStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black.withOpacity(0.65));
     const cellStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
     const totalStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w900);
@@ -307,7 +284,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
               ],
             ),
           ),
-=======
     final headerStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w900,
@@ -406,40 +382,32 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
           Expanded(flex: 2, child: Text(_moneyFmt.format(amountSum), style: bold, textAlign: TextAlign.right)),
           Expanded(flex: 2, child: Text(_moneyFmt.format(commSum), style: bold, textAlign: TextAlign.right)),
           Expanded(flex: 2, child: Text(_moneyFmt.format(totalSum), style: bold, textAlign: TextAlign.right)),
->>>>>>> feature/export-daily-jpeg
         ],
       ),
     );
   }
 
   Widget _summaryCard() {
-<<<<<<< HEAD
     Widget row(String label, int value, {bool bold = false}) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
-=======
     Widget row(String label, String value, {bool bold = false}) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
->>>>>>> feature/export-daily-jpeg
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Expanded(child: Text(label)),
-<<<<<<< HEAD
             Text(
               "${_moneyFmt.format(value)} MMK",
               style: TextStyle(fontWeight: bold ? FontWeight.w900 : FontWeight.w700),
             ),
-=======
             Text(value, style: TextStyle(fontWeight: bold ? FontWeight.w900 : FontWeight.w700)),
->>>>>>> feature/export-daily-jpeg
           ],
         ),
       );
     }
 
-<<<<<<< HEAD
     Widget countRow(String label, int value, {bool bold = false}) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 7),
@@ -548,7 +516,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
                     ),
                   ],
                 ),
-=======
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -768,7 +735,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
                     ),
                   ),
                 ],
->>>>>>> feature/export-daily-jpeg
               ),
             ),
           ],
@@ -777,7 +743,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     );
   }
 
-<<<<<<< HEAD
   Future<XFile> _capturePageToFile(int i) async {
     final boundary = _pageKeys[i].currentContext!.findRenderObject() as RenderRepaintBoundary;
     final image = await boundary.toImage(pixelRatio: 3.0);
@@ -814,7 +779,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
-=======
   Widget _buildDepositPage(int idx) {
     final slice = _depositSliceFor(idx);
     return _pageContainer(
@@ -861,13 +825,11 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
         ],
       ),
     );
->>>>>>> feature/export-daily-jpeg
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-<<<<<<< HEAD
       appBar: AppBar(
         title: const Text("Cherry Daily Report"),
         backgroundColor: Colors.white,
@@ -876,7 +838,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
             onPressed: _exporting ? null : _exportAndShare,
             icon: _exporting
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-=======
       backgroundColor: const Color(0xFFFFF6F8),
       appBar: AppBar(
         title: Text("${widget.bossName} Export"),
@@ -886,13 +847,11 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
             onPressed: _exporting ? null : _showExportSheet,
             icon: _exporting
                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
->>>>>>> feature/export-daily-jpeg
                 : const Icon(Icons.ios_share),
           ),
         ],
       ),
       body: PageView.builder(
-<<<<<<< HEAD
         itemCount: _pageCount,
         itemBuilder: (_, i) {
             final page = _page(i);
@@ -907,7 +866,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
               ],
             );
           },
-=======
         controller: _pageCtrl,
         itemCount: _pageCount,
         itemBuilder: (_, idx) {
@@ -915,12 +873,10 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
           if (_isWithdrawPage(idx)) return _buildWithdrawPage(idx);
           return _buildSummaryPage(idx);
         },
->>>>>>> feature/export-daily-jpeg
       ),
     );
   }
 }
-<<<<<<< HEAD
 
 // --- repeating watermark painter (export only) ---
 class RepeatingWatermark extends CustomPainter {
@@ -970,5 +926,3 @@ class RepeatingWatermark extends CustomPainter {
     return oldDelegate.text != text;
   }
 }
-=======
->>>>>>> feature/export-daily-jpeg
