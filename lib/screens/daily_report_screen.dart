@@ -259,6 +259,25 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     );
   }
 
+    Widget countRow(String label, int value, {bool bold = false}) {
+      final txt = " စောင်";
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(child: Text(label)),
+            Text(
+              txt,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
   Widget _card(Widget child) {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -328,6 +347,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                 children: [
                   summaryRow("Previous Balance (ယခင်လက်ကျန်)", previousBalance),
                   summaryRow("Total Deposit (ဒီနေ့အဝင်)", totalDeposit),
+                    const Divider(),
+
                     const Divider(),
                   summaryRow("Sub Total", subTotal, bold: true),
                   summaryRow("Total Withdraw (ဒီနေ့အထွက်)", totalWithdraw),
