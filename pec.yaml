@@ -1,0 +1,58 @@
+[1mdiff --git a/pubspec.yaml b/pubspec.yaml[m
+[1mindex 919dff9..3970b1b 100644[m
+[1m--- a/pubspec.yaml[m
+[1m+++ b/pubspec.yaml[m
+[36m@@ -1,40 +1,19 @@[m
+ name: cherrys_ledger[m
+[31m-description: "A new Flutter project."[m
+[31m-# The following line prevents the package from being accidentally published to[m
+[31m-# pub.dev using `flutter pub publish`. This is preferred for private packages.[m
+[31m-publish_to: 'none' # Remove this line if you wish to publish to pub.dev[m
+[31m-[m
+[31m-# The following defines the version and build number for your application.[m
+[31m-# A version number is three numbers separated by dots, like 1.2.43[m
+[31m-# followed by an optional build number separated by a +.[m
+[31m-# Both the version and the builder number may be overridden in flutter[m
+[31m-# build by specifying --build-name and --build-number, respectively.[m
+[31m-# In Android, build-name is used as versionName while build-number used as versionCode.[m
+[31m-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning[m
+[31m-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.[m
+[31m-# Read more about iOS versioning at[m
+[31m-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html[m
+[31m-# In Windows, build-name is used as the major, minor, and patch parts[m
+[31m-# of the product and file versions while build-number is used as the build suffix.[m
+[32m+[m[32mdescription: Cherry’s Ledger[m
+[32m+[m[32mpublish_to: "none"[m
+ version: 1.0.0+2[m
+ [m
+ environment:[m
+[31m-  sdk: ^3.10.8[m
+[32m+[m[32m  sdk: ">=3.10.0 <4.0.0"[m
+ [m
+[31m-# Dependencies specify other packages that your package needs in order to work.[m
+[31m-# To automatically upgrade your package dependencies to the latest versions[m
+[31m-# consider running `flutter pub upgrade --major-versions`. Alternatively,[m
+[31m-# dependencies can be manually updated by changing the version numbers below to[m
+[31m-# the latest version available on pub.dev. To see which dependencies have newer[m
+[31m-# versions available, run `flutter pub outdated`.[m
+ dependencies:[m
+[32m+[m[32m  flutter:[m
+[32m+[m[32m    sdk: flutter[m
+   intl: ^0.19.0[m
+   shared_preferences: ^2.2.2[m
+   path_provider: ^2.1.4[m
+   share_plus: ^10.0.2[m
+[31m-  cross_file: ^0.3.4+2[m
+   excel: ^4.0.6[m
+[31m-  cross_file: ^0.3.4+2[m
+ [m
+ flutter:[m
+   uses-material-design: true[m
+[36m@@ -45,6 +24,6 @@[m [mflutter:[m
+     - family: NotoSansMyanmar[m
+       fonts:[m
+         - asset: assets/fonts/NotoSansMyanmar-Regular.ttf[m
+[32m+[m
+ dev_dependencies:[m
+[31m-  intl: ^0.19.0[m
+   flutter_lints: ^6.0.0[m
