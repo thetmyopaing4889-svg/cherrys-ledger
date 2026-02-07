@@ -592,20 +592,49 @@ Future<void> _saveAllToGallery() async {
   Widget _pageContainer({required Widget child, required int pageIndex}) {
     return RepaintBoundary(
       key: _pageKeys[pageIndex],
-      child: Container(
-        color: const Color(0xFFFFF6F8),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Stack(
-          children: [
-            _watermark(),
-            Positioned.fill(child: child),
-          ],
-        ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth;
+          final h = c.maxHeight;
+          final forceRotateOnly = _exportLandscape && !_isSummaryPage(pageIndex);
+
+          // Normal portrait preview / summary export
+          final portrait = SizedBox(width: w, height: h, child: child);
+
+          // Export-only (deposit/withdraw): keep portrait canvas, rotate content only and fill screen.
+          final rotatedFill = SizedBox(
+            width: w,
+            height: h,
+            child: FittedBox(
+              fit: BoxFit.cover, // fill portrait screen (may crop a bit, but text stays large)
+              alignment: Alignment.center,
+              child: RotatedBox(
+                quarterTurns: 1, // rotate content 90deg
+                child: SizedBox(
+                  width: w,
+                  height: h,
+                  child: child,
+                ),
+              ),
+            ),
+          );
+
+          return Container(
+            color: const Color(0xFFFFF6F8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Stack(
+              children: [
+                _watermark(),
+                Positioned.fill(
+                  child: forceRotateOnly ? rotatedFill : portrait,
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
-
-
 
   Widget _buildPage(int pageIndex) {
     if (_isDepositPage(pageIndex)) {
