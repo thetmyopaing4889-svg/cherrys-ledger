@@ -719,7 +719,7 @@ Future<void> _saveAllToGallery() async {
         actions: [
           IconButton(
             tooltip: "Save JPEG to Gallery",
-              onPressed: _exporting ? null : _shareExcel,
+              onPressed: _exporting ? null : _saveAllToGallery,
               icon: const Icon(Icons.photo_library),
           ),
           IconButton(
@@ -747,7 +747,7 @@ Future<void> _saveAllToGallery() async {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _exporting ? null : _shareExcel,
+                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
                     icon: const Icon(Icons.ios_share),
                     label: Text(_exporting ? "Exporting..." : "Share JPEG (All Pages)"),
                   ),
