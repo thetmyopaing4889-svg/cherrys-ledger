@@ -418,6 +418,14 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     setState(() => _exporting = true);
     try {
       final files = await _exportJpegPages();
+      if (files.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Nothing to export")),
+          );
+        }
+        return;
+      }
       await Share.shareXFiles(
         files,
         text: "${widget.bossName} Daily Report (${_dateFmt.format(widget.date)})",
@@ -425,7 +433,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Share failed: \$e")),
+          SnackBar(content: Text("Share failed: $e")),
         );
       }
     } finally {
@@ -433,47 +441,56 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     }
   }
 
-
   Future<List<XFile>> _exportJpegPages() async {
     final out = <XFile>[];
     final dir = await getTemporaryDirectory();
 
     for (int i = 0; i < _pageCount; i++) {
-      final key = _pageKeys[i];
-      final ctx = key.currentContext;
+      // Ensure the page is rendered before capture
+      await _pc.animateToPage(
+        i,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+
+      final ctx = _pageKeys[i].currentContext;
       if (ctx == null) continue;
 
-      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
-      final uiImage = await boundary.toImage(pixelRatio: 3.0);
+      final ro = ctx.findRenderObject();
+      if (ro is! RenderRepaintBoundary) continue;
+
+      final uiImage = await ro.toImage(pixelRatio: 3.0);
       final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
+      if (byteData == null) continue;
 
-      // Deposit/Withdraw pages => export landscape by rotating the bitmap.
-      // Summary page stays portrait.
-      final isSummary = _isSummaryPage(i);
-
-      late final List<int> finalBytes;
+      final pngBytes = byteData.buffer.asUint8List();
       final decoded = img.decodePng(pngBytes);
 
+      List<int> finalBytes;
       if (decoded == null) {
         // fallback
         finalBytes = pngBytes;
-      } else if (!isSummary) {
-        final rotated = img.copyRotate(decoded, angle: 90);
-        finalBytes = img.encodeJpg(rotated, quality: 92);
       } else {
-        finalBytes = img.encodeJpg(decoded, quality: 92);
+        final isSummary = _isSummaryPage(i);
+        if (!isSummary) {
+          // Deposit/Withdraw pages => export landscape
+          final rotated = img.copyRotate(decoded, angle: 90);
+          finalBytes = img.encodeJpg(rotated, quality: 92);
+        } else {
+          // Summary stays portrait
+          finalBytes = img.encodeJpg(decoded, quality: 92);
+        }
       }
 
       final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
       final file = File("${dir.path}/$name.jpg");
-      await File(file.toString()).writeAsBytes(finalBytes, flush: true);
-      out.add(XFile(file.toString()));
+      await file.writeAsBytes(finalBytes, flush: true);
+      out.add(XFile(file.path));
     }
 
     return out;
   }
-
 
   Future<void> _saveAllToGallery() async {
     if (_exporting) return;
@@ -490,9 +507,18 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       }
 
       final pages = await _exportJpegPages();
+      if (pages.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Nothing to save")),
+          );
+        }
+        return;
+      }
+
       int saved = 0;
       for (final x in pages) {
-        final p = _cleanFilePath(x.path);
+        final p = x.path; // IMPORTANT: use real path, not File.toString()
         final file = File(p);
         if (!await file.exists()) continue;
 
@@ -525,6 +551,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   }
 
   Future<void> _shareExcel() async {
+
 
     if (_exporting) return;
     setState(() => _exporting = true);
