@@ -58,15 +58,13 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
   String _ymd(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
-    return "${d.year}
+    return "${d.year}-$mm-$dd";
+  }
 
   Future<bool> _ensureGalleryPermission() async {
     if (!Platform.isAndroid) return true;
-
-    // Android 13+ prefers photos permission; older uses storage.
     final photos = await Permission.photos.request();
     if (photos.isGranted) return true;
-
     final storage = await Permission.storage.request();
     return storage.isGranted;
   }
@@ -77,9 +75,6 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
     final p = (pageIndex + 1).toString().padLeft(2, '0');
     final n = pageCount.toString().padLeft(2, '0');
     return "${boss}_${d}_p${p}of${n}";
-  }
-
--$mm-$dd";
   }
 
   // full-screen pages: deposit pages + withdraw pages + summary page
@@ -119,7 +114,6 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
   }
 
   final PageController _pc = PageController();
-  int _currentPage = 0;
 
   late final List<GlobalKey> _pageKeys =
       List.generate(_pageCount, (_) => GlobalKey());
