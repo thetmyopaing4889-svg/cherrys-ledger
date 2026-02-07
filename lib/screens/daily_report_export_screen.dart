@@ -49,7 +49,6 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   final _dateFmt = DateFormat("d/M/yyyy");
 
   bool _exporting = false;
-  bool _exportLandscape = false;
 int _currentPage = 0;
   String _safeName(String s) =>
       s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
@@ -439,17 +438,12 @@ int _currentPage = 0;
       if (mounted) setState(() => _exporting = false);
     }
   }
-
   Future<List<XFile>> _exportJpegPages() async {
     final out = <XFile>[];
     final dir = await getTemporaryDirectory();
 
     for (int i = 0; i < _pageCount; i++) {
       final isSummary = _isSummaryPage(i);
-
-      if (mounted) {
-        setState(() => _exportLandscape = !isSummary);
-      }
 
       // Ensure the page is rendered in PageView before capture
       await _pc.animateToPage(
@@ -474,10 +468,11 @@ int _currentPage = 0;
       if (decoded == null) {
         jpg = pngBytes; // fallback
       } else if (!isSummary) {
-        // Page was rendered as landscape "paper" (widget rotated CCW). Rotate bitmap CW to final upright landscape.
+        // Deposit/Withdraw => rotate bitmap to landscape JPG (upright)
         final rotated = img.copyRotate(decoded, angle: 90);
         jpg = img.encodeJpg(rotated, quality: 92);
       } else {
+        // Summary stays portrait
         jpg = img.encodeJpg(decoded, quality: 92);
       }
 
@@ -487,13 +482,9 @@ int _currentPage = 0;
       out.add(XFile(file.path));
     }
 
-    if (mounted) {
-      setState(() => _exportLandscape = false);
-    }
     return out;
   }
-
-  Future<void> _saveAllToGallery() async {
+Future<void> _saveAllToGallery() async {
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
@@ -567,48 +558,19 @@ int _currentPage = 0;
   Widget _pageContainer({required Widget child, required int pageIndex}) {
     return RepaintBoundary(
       key: _pageKeys[pageIndex],
-      child: LayoutBuilder(
-        builder: (context, c) {
-          final w = c.maxWidth;
-          final h = c.maxHeight;
-          final forceLandscape = _exportLandscape && !_isSummaryPage(pageIndex);
-
-          // Normal portrait
-          final portrait = SizedBox(width: w, height: h, child: child);
-
-          // Export-only: make deposit/withdraw render like a landscape "paper" without shrinking.
-          // We rotate CCW + contain-fit so content fills nicely, then export pipeline will rotate bitmap CW.
-          final content = forceLandscape
-              ? FittedBox(
-                  fit: BoxFit.contain,
-                  child: RotatedBox(
-                    quarterTurns: 3, // CCW
-                    child: portrait,
-                  ),
-                )
-              : portrait;
-
-          return Container(
-            color: const Color(0xFFFFF6F8),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Stack(
-              children: [
-                _watermark(),
-                Positioned.fill(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: content),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+      child: Container(
+        color: const Color(0xFFFFF6F8),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Stack(
+          children: [
+            _watermark(),
+            Positioned.fill(child: child),
+          ],
+        ),
       ),
     );
   }
+
 
   Widget _buildPage(int pageIndex) {
     if (_isDepositPage(pageIndex)) {
@@ -757,7 +719,7 @@ int _currentPage = 0;
         actions: [
           IconButton(
             tooltip: "Save JPEG to Gallery",
-              onPressed: _exporting ? null : _saveAllToGallery,
+              onPressed: _exporting ? null : _shareExcel,
               icon: const Icon(Icons.photo_library),
           ),
           IconButton(
@@ -785,7 +747,7 @@ int _currentPage = 0;
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
+                    onPressed: _exporting ? null : _shareExcel,
                     icon: const Icon(Icons.ios_share),
                     label: Text(_exporting ? "Exporting..." : "Share JPEG (All Pages)"),
                   ),
