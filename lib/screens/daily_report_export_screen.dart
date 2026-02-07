@@ -49,9 +49,8 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   final _dateFmt = DateFormat("d/M/yyyy");
 
   bool _exporting = false;
-
-  
-  int _currentPage = 0;
+  bool _exportLandscape = false;
+int _currentPage = 0;
   String _safeName(String s) =>
       s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
 
@@ -446,41 +445,96 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     final dir = await getTemporaryDirectory();
 
     for (int i = 0; i < _pageCount; i++) {
-      // Ensure the page is rendered before capture
+      final isSummary = _isSummaryPage(i);
+
+      if (mounted) {
+        setState(() => _exportLandscape = !isSummary);
+      }
+
+      // Ensure the page is rendered in PageView before capture
+      await _pc.animateToPage(
+        i,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOut,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+
+      final key = _pageKeys[i];
+      final ctx = key.currentContext;
+      if (ctx == null) continue;
+
+      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
+      final uiImage = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      final decoded = img.decodePng(pngBytes);
+      late final List<int> jpg;
+
+      if (decoded == null) {
+        jpg = pngBytes; // fallback
+      } else if (!isSummary) {
+        // Page was rendered as landscape "paper" (widget rotated CCW). Rotate bitmap CW to final upright landscape.
+        final rotated = img.copyRotate(decoded, angle: 90);
+        jpg = img.encodeJpg(rotated, quality: 92);
+      } else {
+        jpg = img.encodeJpg(decoded, quality: 92);
+      }
+
+      final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
+      final file = File("${dir.path}/$name.jpg");
+      await file.writeAsBytes(jpg, flush: true);
+      out.add(XFile(file.path));
+    }
+
+    if (mounted) {
+      setState(() => _exportLandscape = false);
+    }
+    return out;
+  }
+
+      // Ensure page is rendered.
       await _pc.animateToPage(
         i,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
       );
-      await Future<void>.delayed(const Duration(milliseconds: 180));
+      await Future<void>.delayed(const Duration(milliseconds: 160));
 
-      final ctx = _pageKeys[i].currentContext;
+      final key = _pageKeys[i];
+      final ctx = key.currentContext;
       if (ctx == null) continue;
 
-      final ro = ctx.findRenderObject();
-      if (ro is! RenderRepaintBoundary) continue;
-
-      final uiImage = await ro.toImage(pixelRatio: 3.0);
+      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
+      final uiImage = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) continue;
+      final pngBytes = byteData!.buffer.asUint8List();
 
-      final pngBytes = byteData.buffer.asUint8List();
+      // Decode + export jpg. Deposit/Withdraw => rotate to landscape jpg.
       final decoded = img.decodePng(pngBytes);
+      late final List<int> jpg;
 
-      List<int> finalBytes;
       if (decoded == null) {
-        // fallback
-        finalBytes = pngBytes;
+        jpg = pngBytes; // fallback
+      } else if (!isSummary) {
+        final rotated = img.copyRotate(decoded, angle: 90);
+        jpg = img.encodeJpg(rotated, quality: 92);
       } else {
-        final isSummary = _isSummaryPage(i);
-        if (!isSummary) {
-          // Deposit/Withdraw pages => export landscape
-          final rotated = img.copyRotate(decoded, angle: 90);
-          finalBytes = img.encodeJpg(rotated, quality: 92);
-        } else {
-          // Summary stays portrait
-          finalBytes = img.encodeJpg(decoded, quality: 92);
-        }
+        jpg = img.encodeJpg(decoded, quality: 92);
+      }
+
+      final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
+      final file = File("${dir.path}/$name.jpg");
+      await file.writeAsBytes(jpg, flush: true);
+      out.add(XFile(file.path));
+    }
+
+    if (mounted) {
+      setState(() => _exportLandscape = false);
+    }
+
+    return out;
+  }
       }
 
       final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
@@ -518,7 +572,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
       int saved = 0;
       for (final x in pages) {
-        final p = x.path; // IMPORTANT: use real path, not File.toString()
+                  final p = _cleanFilePath(x.path);
         final file = File(p);
         if (!await file.exists()) continue;
 
@@ -566,35 +620,45 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   Widget _pageContainer({required Widget child, required int pageIndex}) {
     return RepaintBoundary(
       key: _pageKeys[pageIndex],
-      child: Container(
-        color: const Color(0xFFFFF6F8),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Stack(
-          children: [
-            _watermark(),
-            Positioned.fill(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _header(),
-                  Expanded(child: child),
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      "Page ${pageIndex + 1} / $_pageCount",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black.withOpacity(0.55),
-                      ),
-                    ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth;
+          final h = c.maxHeight;
+          final forceLandscape = _exportLandscape && !_isSummaryPage(pageIndex);
+
+          // Normal portrait
+          final portrait = SizedBox(width: w, height: h, child: child);
+
+          // Export-only: make deposit/withdraw render like a landscape "paper" without shrinking.
+          // We rotate CCW + contain-fit so content fills nicely, then export pipeline will rotate bitmap CW.
+          final content = forceLandscape
+              ? FittedBox(
+                  fit: BoxFit.contain,
+                  child: RotatedBox(
+                    quarterTurns: 3, // CCW
+                    child: portrait,
                   ),
-                ],
-              ),
+                )
+              : portrait;
+
+          return Container(
+            color: const Color(0xFFFFF6F8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Stack(
+              children: [
+                _watermark(),
+                Positioned.fill(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: content),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -746,12 +810,12 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
         actions: [
           IconButton(
             tooltip: "Save JPEG to Gallery",
-              onPressed: _exporting ? null : _saveAllToGallery,
+              onPressed: _exporting ? null : _shareAllPagesAsJpeg,
               icon: const Icon(Icons.photo_library),
           ),
           IconButton(
             tooltip: "Share Excel",
-            onPressed: _exporting ? null : _shareExcel,
+            onPressed: _exporting ? null : _saveAllToGallery,
             icon: const Icon(Icons.table_chart),
           ),
           const SizedBox(width: 6),
@@ -774,7 +838,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _exporting ? null : _saveAllToGallery,
+                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
                     icon: const Icon(Icons.ios_share),
                     label: Text(_exporting ? "Exporting..." : "Share JPEG (All Pages)"),
                   ),
@@ -782,7 +846,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _exporting ? null : _shareExcel,
+                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
                     icon: const Icon(Icons.table_chart),
                     label: const Text("Share Excel"),
                   ),
