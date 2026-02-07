@@ -49,6 +49,9 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   final _dateFmt = DateFormat("d/M/yyyy");
 
   bool _exporting = false;
+
+  bool _exportLandscape = false;
+
 int _currentPage = 0;
   String _safeName(String s) =>
       s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
