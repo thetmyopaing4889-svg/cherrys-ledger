@@ -485,6 +485,67 @@ int _currentPage = 0;
     return out;
   }
 
+  Future<void> _saveAllToGallery() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+
+    try {
+      final ok = await _ensureGalleryPermission();
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Gallery permission denied")),
+          );
+        }
+        return;
+      }
+
+      final pages = await _exportJpegPages();
+      if (pages.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Nothing to save")),
+          );
+        }
+        return;
+      }
+
+      int saved = 0;
+      for (final x in pages) {
+        final p = x.path;
+        final file = File(p);
+        if (!await file.exists()) continue;
+
+        final res = await ImageGallerySaverPlus.saveFile(p);
+
+        bool okSave = false;
+        if (res is Map) {
+          final v1 = res["isSuccess"];
+          final v2 = res["success"];
+          if (v1 == true || v2 == true) okSave = true;
+        } else if (res != null) {
+          okSave = true;
+        }
+
+        if (okSave) saved++;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Saved to Gallery: $saved page(s)")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Save failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   Future<void> _shareExcel() async {
 
     if (_exporting) return;
