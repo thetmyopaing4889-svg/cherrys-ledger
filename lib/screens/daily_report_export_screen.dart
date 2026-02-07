@@ -51,23 +51,14 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   bool _exporting = false;
 
   
-  final PageController _controller = PageController();
   int _currentPage = 0;
-String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
+  String _safeName(String s) =>
+      s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
 
   String _ymd(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
-    return "${d.year}
-  Future<bool> _ensureGalleryPermission() async {
-    if (!Platform.isAndroid) return true;
-    final photos = await Permission.photos.request();
-    if (photos.isGranted) return true;
-    final storage = await Permission.storage.request();
-    return storage.isGranted;
-  }
-
--$mm-$dd";
+    return "\${d.year}-\$mm-\$dd";
   }
 
   Future<bool> _ensureGalleryPermission() async {
@@ -83,9 +74,8 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
     final d = _ymd(widget.date);
     final p = (pageIndex + 1).toString().padLeft(2, '0');
     final n = pageCount.toString().padLeft(2, '0');
-    return "${boss}_${d}_p${p}of${n}";
+    return "\${boss}_\${d}_p\${p}of\${n}";
   }
-
   // full-screen pages: deposit pages + withdraw pages + summary page
   static const int _rowsPerPage = 10;
 
