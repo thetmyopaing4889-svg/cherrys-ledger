@@ -407,18 +407,19 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       final files = await _exportJpegPages();
       await Share.shareXFiles(
         files,
-        text: "\${widget.bossName} Daily Report (\${_dateFmt.format(widget.date)})",
+        text: "${widget.bossName} Daily Report (${_dateFmt.format(widget.date)})",
       );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Share failed: \$e")),
+        );
+      }
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
   }
 
-      await Share.shareXFiles(files, text: "${widget.bossName} Daily Report (${_dateFmt.format(widget.date)})");
-    } finally {
-      if (mounted) setState(() => _exporting = false);
-    }
-  }
 
   Future<List<XFile>> _exportJpegPages() async {
     final out = <XFile>[];
@@ -727,7 +728,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
+                    onPressed: _exporting ? null : _saveAllToGallery,
                     icon: const Icon(Icons.ios_share),
                     label: Text(_exporting ? "Exporting..." : "Share JPEG (All Pages)"),
                   ),
