@@ -98,27 +98,14 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       List.generate(_pageCount, (_) => GlobalKey());
 
   Widget _watermark() {
-    return IgnorePointer(
-      child: Center(
-        child: Transform.rotate(
-          angle: -15 * math.pi / 180,
-          child: Opacity(
-            opacity: 0.07,
-            child: Text(
-              "CHERRY’S LEDGER",
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 44,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2.0,
-                color: Colors.black,
-              ),
-            ),
-          ),
-        ),
+  return Positioned.fill(
+    child: IgnorePointer(
+      child: CustomPaint(
+        painter: RepeatingWatermark("CHERRY’S LEDGER"),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _header() {
     return Column(
@@ -608,39 +595,38 @@ class RepeatingWatermark extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // lightweight repeated watermark that won't "block" reading
-    final style = ui.TextStyle(
-      color: const ui.Color(0xFF000000).withOpacity(0.04),
-      fontSize: 18,
-      fontWeight: ui.FontWeight.w900,
+    final textStyle = ui.TextStyle(
+      color: const Color(0xFF000000).withOpacity(0.05),
+      fontSize: 16,
+      fontWeight: FontWeight.w900,
       letterSpacing: 1.2,
     );
 
-    final paraStyle = ui.ParagraphStyle(
-      textAlign: TextAlign.left,
-      textDirection: ui.TextDirection.ltr,
+    final paragraphStyle = ui.ParagraphStyle(
+      textAlign: TextAlign.center,
     );
 
-    final pb = ui.ParagraphBuilder(paraStyle)
-      ..pushStyle(style)
+    final paragraphBuilder = ui.ParagraphBuilder(paragraphStyle)
+      ..pushStyle(textStyle)
       ..addText(text);
 
-    final p = pb.build();
-    p.layout(const ui.ParagraphConstraints(width: 260));
+    final paragraph = paragraphBuilder.build();
+    paragraph.layout(const ui.ParagraphConstraints(width: 240));
 
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
-    canvas.rotate(-15 * math.pi / 180);
+    canvas.rotate(-20 * math.pi / 180);
     canvas.translate(-size.width / 2, -size.height / 2);
 
-    const gapX = 220.0;
-    const gapY = 180.0;
+    const gapX = 160.0;
+    const gapY = 140.0;
 
     for (double y = -size.height; y < size.height * 2; y += gapY) {
       for (double x = -size.width; x < size.width * 2; x += gapX) {
-        canvas.drawParagraph(p, ui.Offset(x, y));
+        canvas.drawParagraph(paragraph, Offset(x, y));
       }
     }
+
     canvas.restore();
   }
 
