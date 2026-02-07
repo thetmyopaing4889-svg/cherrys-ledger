@@ -450,7 +450,7 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
       }
 
       final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
-      final file = Path("${dir.path}/$name.jpg");
+      final file = File("${dir.path}/$name.jpg");
       await File(file.toString()).writeAsBytes(finalBytes, flush: true);
       out.add(XFile(file.toString()));
     }
