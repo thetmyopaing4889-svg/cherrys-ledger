@@ -11,7 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image/image.dart' as img;
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class DailyReportExportScreen extends StatefulWidget {
@@ -485,7 +485,7 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
       for (final x in pages) {
         final bytes = await File(x.path).readAsBytes();
         final name = File(x.path).uri.pathSegments.last.replaceAll(".jpg", "");
-        final res = await ImageGallerySaver.saveImage(bytes, quality: 92, name: name);
+        final res = await ImageGallerySaverPlus.saveImage(bytes, quality: 92, name: name);
         if (res != null) saved += 1;
       }
 
