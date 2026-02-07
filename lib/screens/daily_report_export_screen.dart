@@ -10,6 +10,9 @@ import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:image/image.dart' as img;
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class DailyReportExportScreen extends StatefulWidget {
   final String bossName;
@@ -47,12 +50,36 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
   bool _exporting = false;
 
-  String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
+  
+  final PageController _controller = PageController();
+  int _currentPage = 0;
+String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
 
   String _ymd(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
-    return "${d.year}-$mm-$dd";
+    return "${d.year}
+
+  Future<bool> _ensureGalleryPermission() async {
+    if (!Platform.isAndroid) return true;
+
+    // Android 13+ prefers photos permission; older uses storage.
+    final photos = await Permission.photos.request();
+    if (photos.isGranted) return true;
+
+    final storage = await Permission.storage.request();
+    return storage.isGranted;
+  }
+
+  String _baseFileName({required int pageIndex, required int pageCount}) {
+    final boss = _safeName(widget.bossName);
+    final d = _ymd(widget.date);
+    final p = (pageIndex + 1).toString().padLeft(2, '0');
+    final n = pageCount.toString().padLeft(2, '0');
+    return "${boss}_${d}_p${p}of${n}";
+  }
+
+-$mm-$dd";
   }
 
   // full-screen pages: deposit pages + withdraw pages + summary page
@@ -397,6 +424,91 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     }
   }
 
+  Future<List<XFile>> _exportJpegPages() async {
+    final out = <XFile>[];
+    final dir = await getTemporaryDirectory();
+
+    for (int i = 0; i < _pageCount; i++) {
+      final key = _pageKeys[i];
+      final ctx = key.currentContext;
+      if (ctx == null) continue;
+
+      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
+      final uiImage = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      // Deposit/Withdraw pages => export landscape by rotating the bitmap.
+      // Summary page stays portrait.
+      final isSummary = _isSummaryPage(i);
+
+      late final List<int> finalBytes;
+      final decoded = img.decodePng(pngBytes);
+
+      if (decoded == null) {
+        // fallback
+        finalBytes = pngBytes;
+      } else if (!isSummary) {
+        final rotated = img.copyRotate(decoded, angle: 90);
+        finalBytes = img.encodeJpg(rotated, quality: 92);
+      } else {
+        finalBytes = img.encodeJpg(decoded, quality: 92);
+      }
+
+      final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
+      final file = Path("${dir.path}/$name.jpg");
+      await File(file.toString()).writeAsBytes(finalBytes, flush: true);
+      out.add(XFile(file.toString()));
+    }
+
+    return out;
+  }
+
+  Future<void> _saveAllToGallery() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+
+    try {
+      final ok = await _ensureGalleryPermission();
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Gallery permission denied")),
+          );
+        }
+        return;
+      }
+
+      final pages = await _exportJpegPages();
+      int saved = 0;
+
+      for (final x in pages) {
+        final bytes = await File(x.path).readAsBytes();
+        final name = File(x.path).uri.pathSegments.last.replaceAll(".jpg", "");
+        final res = await ImageGallerySaver.saveImage(bytes, quality: 92, name: name);
+        if (res != null) saved += 1;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Saved to Gallery: $saved file(s)")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Save failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+
+
+
+
   Future<void> _shareExcel() async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -528,6 +640,58 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       ),
     );
   }
+
+  Future<void> _exportAndShare() async {
+    if (_exporting) return;
+
+    await showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.send),
+              title: const Text("Share All JPEG Pages"),
+              onTap: () async {
+                Navigator.pop(context);
+                setState(() => _exporting = true);
+                try {
+                  final pages = await _exportJpegPages();
+                  await Share.shareXFiles(
+                    pages,
+                    text: "${widget.bossName} Daily Report (${_dateFmt.format(widget.date)})",
+                  );
+                } finally {
+                  if (mounted) setState(() => _exporting = false);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.save_alt),
+              title: const Text("Save JPEG to Gallery"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _saveAllToGallery();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.table_chart),
+              title: const Text("Share Excel"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _shareExcel();
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+
 
   @override
   Widget build(BuildContext context) {
