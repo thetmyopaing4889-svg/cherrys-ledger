@@ -58,7 +58,7 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   String _ymd(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
-    return "\${d.year}-\$mm-\$dd";
+    return "${d.year}-$mm-$dd";
   }
 
   Future<bool> _ensureGalleryPermission() async {
@@ -69,12 +69,25 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     return storage.isGranted;
   }
 
+  String _cleanFilePath(String p) {
+    // sometimes share cache path comes as: File: '/path/to/file.jpg'
+    var s = p;
+    if (s.startsWith("File:")) {
+      s = s.replaceFirst("File:", "").trim();
+    }
+    // strip wrapping quotes if any
+    if ((s.startsWith("\x27") && s.endsWith("\x27")) || (s.startsWith("\"") && s.endsWith("\""))) {
+      s = s.substring(1, s.length - 1);
+    }
+    return s;
+  }
+
   String _baseFileName({required int pageIndex, required int pageCount}) {
     final boss = _safeName(widget.bossName);
     final d = _ymd(widget.date);
     final p = (pageIndex + 1).toString().padLeft(2, '0');
     final n = pageCount.toString().padLeft(2, '0');
-    return "\${boss}_\${d}_p\${p}of\${n}";
+    return "${boss}_${d}_p${p}of${n}";
   }
   // full-screen pages: deposit pages + withdraw pages + summary page
   static const int _rowsPerPage = 10;
@@ -480,8 +493,8 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
       int saved = 0;
 
       for (final x in pages) {
-        final bytes = await File(x.path).readAsBytes();
-        final name = File(x.path).uri.pathSegments.last.replaceAll(".jpg", "");
+        final bytes = await File(_cleanFilePath(x.path)).readAsBytes();
+        final name = File(_cleanFilePath(x.path)).uri.pathSegments.last.replaceAll(".jpg", "");
         final res = await ImageGallerySaverPlus.saveImage(bytes, quality: 92, name: name);
         if (res != null) saved += 1;
       }
