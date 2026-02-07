@@ -438,9 +438,13 @@ int _currentPage = 0;
       if (mounted) setState(() => _exporting = false);
     }
   }
+  
   Future<List<XFile>> _exportJpegPages() async {
     final out = <XFile>[];
     final dir = await getTemporaryDirectory();
+
+    // A4 landscape ratio (width/height)
+    const targetRatio = 297 / 210;
 
     for (int i = 0; i < _pageCount; i++) {
       final isSummary = _isSummaryPage(i);
@@ -463,18 +467,47 @@ int _currentPage = 0;
       final pngBytes = byteData!.buffer.asUint8List();
 
       final decoded = img.decodePng(pngBytes);
-      late final List<int> jpg;
+      if (decoded == null) continue;
 
-      if (decoded == null) {
-        jpg = pngBytes; // fallback
-      } else if (!isSummary) {
-        // Deposit/Withdraw => rotate bitmap to landscape JPG (upright)
-        final rotated = img.copyRotate(decoded, angle: 90);
-        jpg = img.encodeJpg(rotated, quality: 92);
+      img.Image finalImg;
+
+      if (isSummary) {
+        // Summary stays portrait (no rotate/crop)
+        finalImg = decoded;
       } else {
-        // Summary stays portrait
-        jpg = img.encodeJpg(decoded, quality: 92);
+        // Deposit/Withdraw: rotate to landscape, then center-crop to A4 landscape ratio
+        final rotated = img.copyRotate(decoded, angle: 90);
+
+        final w = rotated.width;
+        final h = rotated.height;
+        final curRatio = w / h;
+
+        int cropW, cropH;
+        if (curRatio > targetRatio) {
+          cropH = h;
+          cropW = (h * targetRatio).round();
+        } else {
+          cropW = w;
+          cropH = (w / targetRatio).round();
+        }
+
+        final x = ((w - cropW) ~/ 2).clamp(0, w - 1);
+        final y = ((h - cropH) ~/ 2).clamp(0, h - 1);
+
+        finalImg = img.copyCrop(rotated, x: x, y: y, width: cropW, height: cropH);
       }
+
+      final jpg = img.encodeJpg(finalImg, quality: 92);
+
+      final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
+      final file = File("${dir.path}/$name.jpg");
+      await file.writeAsBytes(jpg, flush: true);
+      out.add(XFile(file.path));
+    }
+
+    return out;
+  }
+
 
       final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
       final file = File("${dir.path}/$name.jpg");
@@ -555,6 +588,7 @@ Future<void> _saveAllToGallery() async {
     }
   }
 
+  
   Widget _pageContainer({required Widget child, required int pageIndex}) {
     return RepaintBoundary(
       key: _pageKeys[pageIndex],
@@ -570,6 +604,7 @@ Future<void> _saveAllToGallery() async {
       ),
     );
   }
+
 
 
   Widget _buildPage(int pageIndex) {
