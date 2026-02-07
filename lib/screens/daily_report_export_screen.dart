@@ -474,10 +474,10 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     return out;
   }
 
+
   Future<void> _saveAllToGallery() async {
     if (_exporting) return;
     setState(() => _exporting = true);
-
     try {
       final ok = await _ensureGalleryPermission();
       if (!ok) {
@@ -491,17 +491,26 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
       final pages = await _exportJpegPages();
       int saved = 0;
-
       for (final x in pages) {
-        final bytes = await File(_cleanFilePath(x.path)).readAsBytes();
-        final name = File(_cleanFilePath(x.path)).uri.pathSegments.last.replaceAll(".jpg", "");
-        final res = await ImageGallerySaverPlus.saveImage(bytes, quality: 92, name: name);
-        if (res != null) saved += 1;
+        final p = _cleanFilePath(x.path);
+        final file = File(p);
+        if (!await file.exists()) continue;
+
+        final res = await ImageGallerySaverPlus.saveFile(p);
+        bool okSave = false;
+        if (res is Map) {
+          final v1 = res["isSuccess"];
+          final v2 = res["success"];
+          if (v1 == true || v2 == true) okSave = true;
+        } else if (res != null) {
+          okSave = true;
+        }
+        if (okSave) saved++;
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Saved to Gallery: $saved file(s)")),
+          SnackBar(content: Text("Saved to Gallery: $saved page(s)")),
         );
       }
     } catch (e) {
@@ -515,11 +524,8 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
     }
   }
 
-
-
-
-
   Future<void> _shareExcel() async {
+
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
