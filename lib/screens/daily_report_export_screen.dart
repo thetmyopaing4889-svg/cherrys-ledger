@@ -58,7 +58,16 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
   String _ymd(DateTime d) {
     final mm = d.month.toString().padLeft(2, '0');
     final dd = d.day.toString().padLeft(2, '0');
-    return "${d.year}-$mm-$dd";
+    return "${d.year}
+  Future<bool> _ensureGalleryPermission() async {
+    if (!Platform.isAndroid) return true;
+    final photos = await Permission.photos.request();
+    if (photos.isGranted) return true;
+    final storage = await Permission.storage.request();
+    return storage.isGranted;
+  }
+
+-$mm-$dd";
   }
 
   Future<bool> _ensureGalleryPermission() async {
@@ -405,13 +414,16 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
     if (_exporting) return;
     setState(() => _exporting = true);
     try {
-      final files = <XFile>[];
-      for (int i = 0; i < _pageCount; i++) {
-        // jump to page so it renders
-        await _pc.animateToPage(i, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
-        await Future<void>.delayed(const Duration(milliseconds: 120));
-        files.add(await _capturePageToFile(i));
-      }
+      final files = await _exportJpegPages();
+      await Share.shareXFiles(
+        files,
+        text: "\${widget.bossName} Daily Report (\${_dateFmt.format(widget.date)})",
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
       await Share.shareXFiles(files, text: "${widget.bossName} Daily Report (${_dateFmt.format(widget.date)})");
     } finally {
       if (mounted) setState(() => _exporting = false);
@@ -696,9 +708,9 @@ String _safeName(String s) => s.replaceAll(RegExp(r'[^A-Za-z0-9_\-]+'), "_");
         backgroundColor: Colors.white,
         actions: [
           IconButton(
-            tooltip: "Share JPEG (all pages)",
-            onPressed: _exporting ? null : _shareAllPagesAsJpeg,
-            icon: const Icon(Icons.image),
+            tooltip: "Save JPEG to Gallery",
+              onPressed: _exporting ? null : _saveAllToGallery,
+              icon: const Icon(Icons.photo_library),
           ),
           IconButton(
             tooltip: "Share Excel",
