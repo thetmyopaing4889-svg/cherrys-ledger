@@ -457,7 +457,7 @@ int _currentPage = 0;
         duration: const Duration(milliseconds: 240),
         curve: Curves.easeOut,
       );
-      await Future<void>.delayed(const Duration(milliseconds: 180));
+      await Future.delayed(const Duration(milliseconds: 180));
 
       final key = _pageKeys[i];
       final ctx = key.currentContext;
@@ -490,59 +490,6 @@ int _currentPage = 0;
     if (mounted) {
       setState(() => _exportLandscape = false);
     }
-    return out;
-  }
-
-      // Ensure page is rendered.
-      await _pc.animateToPage(
-        i,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 160));
-
-      final key = _pageKeys[i];
-      final ctx = key.currentContext;
-      if (ctx == null) continue;
-
-      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
-      final uiImage = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
-
-      // Decode + export jpg. Deposit/Withdraw => rotate to landscape jpg.
-      final decoded = img.decodePng(pngBytes);
-      late final List<int> jpg;
-
-      if (decoded == null) {
-        jpg = pngBytes; // fallback
-      } else if (!isSummary) {
-        final rotated = img.copyRotate(decoded, angle: 90);
-        jpg = img.encodeJpg(rotated, quality: 92);
-      } else {
-        jpg = img.encodeJpg(decoded, quality: 92);
-      }
-
-      final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
-      final file = File("${dir.path}/$name.jpg");
-      await file.writeAsBytes(jpg, flush: true);
-      out.add(XFile(file.path));
-    }
-
-    if (mounted) {
-      setState(() => _exportLandscape = false);
-    }
-
-    return out;
-  }
-      }
-
-      final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
-      final file = File("${dir.path}/$name.jpg");
-      await file.writeAsBytes(finalBytes, flush: true);
-      out.add(XFile(file.path));
-    }
-
     return out;
   }
 
@@ -810,12 +757,12 @@ int _currentPage = 0;
         actions: [
           IconButton(
             tooltip: "Save JPEG to Gallery",
-              onPressed: _exporting ? null : _shareAllPagesAsJpeg,
+              onPressed: _exporting ? null : _saveAllToGallery,
               icon: const Icon(Icons.photo_library),
           ),
           IconButton(
             tooltip: "Share Excel",
-            onPressed: _exporting ? null : _saveAllToGallery,
+              onPressed: _exporting ? null : _shareExcel,
             icon: const Icon(Icons.table_chart),
           ),
           const SizedBox(width: 6),
@@ -846,7 +793,7 @@ int _currentPage = 0;
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
+                    onPressed: _exporting ? null : _shareExcel,
                     icon: const Icon(Icons.table_chart),
                     label: const Text("Share Excel"),
                   ),
