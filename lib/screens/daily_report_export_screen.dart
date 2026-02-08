@@ -216,7 +216,7 @@ final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
           ),
           child: Row(
             children: [
-              const Expanded(flex: 2, child: Text("Total", style: bold)),
+              Expanded(flex: 2, child: Text("Total", style: bold)),
               Expanded(
                 flex: 2,
                 child: Text(_moneyFmt.format(amountSum),
