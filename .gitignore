@@ -47,3 +47,4 @@ app.*.map.json
 # local backups
 _backup_*/
 *.BAK_*
+lib/screens/daily_report_export_screen.dart.BAK_*

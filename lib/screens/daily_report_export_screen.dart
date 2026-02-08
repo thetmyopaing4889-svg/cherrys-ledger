@@ -50,8 +50,8 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
   bool _exporting = false;
 
-  bool _exportLandscape = false;
   bool _exportMode = false;
+
 
 
 int _currentPage = 0;
@@ -103,7 +103,6 @@ int _currentPage = 0;
     }
     if (mounted) {
       setState(() {
-        _exportLandscape = false;
       });
     }
     return out;
@@ -296,6 +295,141 @@ int _currentPage = 0;
     );
   }
 
+
+  // Export-only table (professional, no horizontal scroll)
+  Widget _exportTable(List<LedgerTx> list) {
+    final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
+    final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
+    final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
+
+    Widget kv(String k, String v, {bool bold = false}) {
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              k,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.black.withOpacity(0.70),
+              ),
+            ),
+          ),
+          Text(
+            v,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: bold ? FontWeight.w900 : FontWeight.w800,
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (list.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFFFCFE0)),
+        ),
+        child: const Text("No transactions"),
+      );
+    }
+
+    Widget txCard(LedgerTx t) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFCFE0)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    t.personName,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  "${_moneyFmt.format(t.totalKs)}",
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              t.description,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black.withOpacity(0.75)),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF6F8),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFFCFE0)),
+              ),
+              child: Column(
+                children: [
+                  kv("Amount", _moneyFmt.format(t.amountKs)),
+                  const SizedBox(height: 6),
+                  kv("Commission", _moneyFmt.format(t.commissionKs)),
+                  const SizedBox(height: 8),
+                  kv("Total", _moneyFmt.format(t.totalKs), bold: true),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget totals() {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF6F8),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFFFCFE0)),
+        ),
+        child: Column(
+          children: [
+            kv("Total Amount", _moneyFmt.format(amountSum)),
+            const SizedBox(height: 6),
+            kv("Total Commission", _moneyFmt.format(commSum)),
+            const SizedBox(height: 10),
+            kv("Grand Total", _moneyFmt.format(totalSum), bold: true),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFFCFE0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ...list.map(txCard),
+          totals(),
+        ],
+      ),
+    );
+  }
+
   Widget _summaryCard() {
     Widget row(String label, String value, {bool bold = false}) {
       return Padding(
@@ -454,59 +588,39 @@ int _currentPage = 0;
     final dir = await getTemporaryDirectory();
     if (mounted) setState(() => _exportMode = true);
 
-    for (int i = 0; i < _pageCount; i++) {
-      final isSummary = _isSummaryPage(i);
+    try {
+      for (int i = 0; i < _pageCount; i++) {
+        // Ensure the page is rendered in PageView before capture
+        await _pc.animateToPage(
+          i,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOut,
+        );
+        await Future.delayed(const Duration(milliseconds: 180));
 
-      // Export-time: rotate content only for deposit/withdraw (summary stays normal)
-      if (mounted) {
-        setState(() => _exportLandscape = !isSummary);
+        final ctx = _pageKeys[i].currentContext;
+        if (ctx == null) continue;
+
+        final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
+        final uiImage = await boundary.toImage(pixelRatio: 3.0);
+        final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
+        final pngBytes = byteData!.buffer.asUint8List();
+
+        final decoded = img.decodePng(pngBytes);
+        final jpg = (decoded == null)
+            ? pngBytes /* fallback */
+            : img.encodeJpg(decoded, quality: 92);
+
+        final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
+        final file = File("${dir.path}/$name.jpg");
+        await file.writeAsBytes(jpg, flush: true);
+        out.add(XFile(file.path));
       }
-
-      // Ensure the page is rendered in PageView before capture
-      await _pc.animateToPage(
-        i,
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOut,
-      );
-      await Future.delayed(const Duration(milliseconds: 180));
-
-      final ctx = _pageKeys[i].currentContext;
-      if (ctx == null) continue;
-
-      final boundary = ctx.findRenderObject() as RenderRepaintBoundary;
-      final uiImage = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
-
-      final decoded = img.decodePng(pngBytes);
-      late final List<int> jpg;
-
-      if (decoded == null) {
-        jpg = pngBytes; /* fallback */
-      } else if (!isSummary) {
-        /* Deposit/Withdraw: rotate bitmap back to upright landscape */
-        final rotated = img.copyRotate(decoded, angle: 90);
-        jpg = img.encodeJpg(rotated, quality: 92);
-      } else {
-        /* Summary stays portrait */
-        jpg = img.encodeJpg(decoded, quality: 92);
-      }
-
-      final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
-      final file = File("${dir.path}/$name.jpg");
-      await file.writeAsBytes(jpg, flush: true);
-      out.add(XFile(file.path));
+      return out;
+    } finally {
+      if (mounted) setState(() => _exportMode = false);
     }
-
-    if (mounted) {
-      setState(() {
-        _exportLandscape = false;
-        _exportMode = false;
-      });
-    }
-    return out;
   }
-
   Future<void> _saveAllToGallery() async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -608,27 +722,28 @@ int _currentPage = 0;
           }
 
           final w = c.maxWidth;
-          final h = c.maxHeight;
+            final h = c.maxHeight;
 
-          // Preview/UI: always portrait (no UI rotate)
-          if (!_exportMode) return buildPaper(w, h);
+            // Preview: use screen size
+            if (!_exportMode) return buildPaper(w, h);
 
-          final forceLandscape = _exportLandscape && !_isSummaryPage(pageIndex);
-          if (!forceLandscape) return buildPaper(w, h);
+            // Export: keep Summary same as preview (do NOT touch summary layout)
+            if (_isSummaryPage(pageIndex)) return buildPaper(w, h);
 
-          // Export-only: render landscape paper, rotate UI; export pipeline rotates bitmap back.
-          final paperLandscape = buildPaper(h, w);
-          return Center(
-            child: RotatedBox(
-              quarterTurns: 1,
-              child: SizedBox(
-                width: h,
-                height: w,
-                child: paperLandscape,
+            // Export: fixed A4-like portrait paper, scaled to fit screen
+            const paperW = 1000.0;
+            const paperH = 1414.0;
+            return Center(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: paperW,
+                  height: paperH,
+                  child: buildPaper(paperW, paperH),
+                ),
               ),
-            ),
-          );
-        },
+            );
+},
       ),
     );
   }
@@ -638,32 +753,46 @@ int _currentPage = 0;
       final slice = _depositSliceFor(pageIndex);
       return _pageContainer(
         pageIndex: pageIndex,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-              _table(slice),
-            ],
-          ),
-        ),
-      );
+        child: (_exportMode
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
+                  _exportTable(slice),
+                ],
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
+                    _table(slice),
+                  ],
+                ),
+              ));
     }
 
     if (_isWithdrawPage(pageIndex)) {
       final slice = _withdrawSliceFor(pageIndex);
       return _pageContainer(
         pageIndex: pageIndex,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-              _table(slice),
-            ],
-          ),
-        ),
-      );
+        child: (_exportMode
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
+                  _exportTable(slice),
+                ],
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
+                    _table(slice),
+                  ],
+                ),
+              ));
     }
 
     // summary page
