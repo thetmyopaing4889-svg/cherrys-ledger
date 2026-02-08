@@ -599,16 +599,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
             // Export: fixed A4-like portrait paper (bigger canvas so 5 columns fit)
             const paperW = 1120.0;
             const paperH = 1584.0;
-            return Center(
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: paperW,
-                  height: paperH,
-                  child: buildPaper(paperW, paperH),
-                ),
-              ),
-            );
+            return buildPaper(paperW, paperH);
 },
       ),
     );
