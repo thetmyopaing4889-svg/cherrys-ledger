@@ -192,22 +192,19 @@ int _currentPage = 0;
   }
 
   Widget _table(List<LedgerTx> list, {bool export = false}) {
-    final cellFont = export ? 10.5 : 12.0;
-    final boldFont = export ? 10.5 : 12.0;
 
     final headerStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w900,
       color: Colors.black.withOpacity(0.65),
     );
-    final cellStyle = TextStyle(fontSize: cellFont, fontWeight: FontWeight.w700);
-
-    final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
+    final cellStyle = TextStyle(fontSize: export ? 10.5 : 12.0, fontWeight: FontWeight.w700);
+final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
     final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
     final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
 
     Widget totalRow() {
-      final bold = TextStyle(fontSize: boldFont, fontWeight: FontWeight.w900);
+      final bold = TextStyle(fontSize: export ? 11.0 : 12.0, fontWeight: FontWeight.w900);
       return Padding(
         padding: const EdgeInsets.only(top: 10),
         child: Container(
@@ -262,12 +259,14 @@ int _currentPage = 0;
       ),
       child: Column(
         children: [
-          final dt = DataTable(
-              columnSpacing: export ? 8 : 14,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+                columnSpacing: export ? 8 : 14,
                 horizontalMargin: export ? 6 : 12,
-              headingRowHeight: export ? 30 : 32,
-              dataRowMinHeight: export ? 32 : 36,
-              dataRowMaxHeight: export ? 48 : 52,
+                headingRowHeight: 32,
+                dataRowMinHeight: export ? 30 : 36,
+                dataRowMaxHeight: export ? 48 : 52,
               columns: [
                 DataColumn(label: Text("နာမည်", style: headerStyle)),
                 DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle)),
@@ -289,10 +288,9 @@ int _currentPage = 0;
                   ],
                 );
               }).toList(),
-            );
-            Widget tableWidget = export ? dt : SingleChildScrollView(scrollDirection: Axis.horizontal, child: dt);
-            tableWidget,
-            totalRow(),
+            ),
+          ),
+          totalRow(),
         ],
       ),
     );
