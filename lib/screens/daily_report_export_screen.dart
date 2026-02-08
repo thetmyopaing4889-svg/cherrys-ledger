@@ -51,6 +51,8 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
   bool _exporting = false;
 
   bool _exportLandscape = false;
+  bool _exportMode = false;
+
 
 int _currentPage = 0;
   String _safeName(String s) =>
@@ -98,6 +100,11 @@ int _currentPage = 0;
     final out = <List<LedgerTx>>[];
     for (int i = 0; i < list.length; i += _rowsPerPage) {
       out.add(list.sublist(i, math.min(i + _rowsPerPage, list.length)));
+    }
+    if (mounted) {
+      setState(() {
+        _exportLandscape = false;
+      });
     }
     return out;
   }
@@ -445,6 +452,7 @@ int _currentPage = 0;
   Future<List<XFile>> _exportJpegPages() async {
     final out = <XFile>[];
     final dir = await getTemporaryDirectory();
+    if (mounted) setState(() => _exportMode = true);
 
     for (int i = 0; i < _pageCount; i++) {
       final isSummary = _isSummaryPage(i);
@@ -491,7 +499,10 @@ int _currentPage = 0;
     }
 
     if (mounted) {
-      setState(() => _exportLandscape = false);
+      setState(() {
+        _exportLandscape = false;
+        _exportMode = false;
+      });
     }
     return out;
   }
@@ -598,17 +609,15 @@ int _currentPage = 0;
 
           final w = c.maxWidth;
           final h = c.maxHeight;
+
+          // Preview/UI: always portrait (no UI rotate)
+          if (!_exportMode) return buildPaper(w, h);
+
           final forceLandscape = _exportLandscape && !_isSummaryPage(pageIndex);
+          if (!forceLandscape) return buildPaper(w, h);
 
-          // Normal preview: portrait full screen
-          if (!forceLandscape) {
-            return buildPaper(w, h);
-          }
-
-          // Export-only: keep screen full, but render paper as landscape and rotate.
-          // (Result: paper fills screen, text becomes sideways and fills nicely.)
+          // Export-only: render landscape paper, rotate UI; export pipeline rotates bitmap back.
           final paperLandscape = buildPaper(h, w);
-
           return Center(
             child: RotatedBox(
               quarterTurns: 1,
