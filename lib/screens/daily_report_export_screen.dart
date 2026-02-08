@@ -355,9 +355,7 @@ int _currentPage = 0;
                 Expanded(
                   child: Text(
                     t.personName,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),                  ),
                 ),
                 Text(
                   "${_moneyFmt.format(t.totalKs)}",
@@ -724,27 +722,10 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
 
           final w = c.maxWidth;
           final h = c.maxHeight;
-
-          // Preview: use screen size
-          if (!_exportMode) return buildPaper(w, h);
-
-          // Export: keep Summary same as preview (do NOT touch summary layout)
-          if (_isSummaryPage(pageIndex)) return buildPaper(w, h);
-
-          // Export: fixed A4-like portrait paper, scaled to fit screen
-          const paperW = 1000.0;
-          const paperH = 1414.0;
-          return Center(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: SizedBox(
-                width: paperW,
-                height: paperH,
-                child: buildPaper(paperW, paperH),
-              ),
-            ),
-          );
-        },
+          // Always render pages using screen size.
+          // This makes export JPEG match preview proportions and lets the card layout use full width.
+          return buildPaper(w, h);
+},
       ),
     );
   }
