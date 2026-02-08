@@ -191,20 +191,23 @@ int _currentPage = 0;
     );
   }
 
-  Widget _table(List<LedgerTx> list) {
+  Widget _table(List<LedgerTx> list, {bool export = false}) {
+    final cellFont = export ? 10.5 : 12.0;
+    final boldFont = export ? 10.5 : 12.0;
+
     final headerStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w900,
       color: Colors.black.withOpacity(0.65),
     );
-    const cellStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+    final cellStyle = TextStyle(fontSize: cellFont, fontWeight: FontWeight.w700);
 
     final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
     final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
     final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
 
     Widget totalRow() {
-      const bold = TextStyle(fontSize: 12, fontWeight: FontWeight.w900);
+      final bold = TextStyle(fontSize: boldFont, fontWeight: FontWeight.w900);
       return Padding(
         padding: const EdgeInsets.only(top: 10),
         child: Container(
@@ -259,13 +262,12 @@ int _currentPage = 0;
       ),
       child: Column(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columnSpacing: 14,
-              headingRowHeight: 32,
-              dataRowMinHeight: 36,
-              dataRowMaxHeight: 52,
+          final dt = DataTable(
+              columnSpacing: export ? 8 : 14,
+                horizontalMargin: export ? 6 : 12,
+              headingRowHeight: export ? 30 : 32,
+              dataRowMinHeight: export ? 32 : 36,
+              dataRowMaxHeight: export ? 48 : 52,
               columns: [
                 DataColumn(label: Text("နာမည်", style: headerStyle)),
                 DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle)),
@@ -287,142 +289,10 @@ int _currentPage = 0;
                   ],
                 );
               }).toList(),
-            ),
-          ),
-          totalRow(),
-        ],
-      ),
-    );
-  }
-
-
-  // Export-only table (professional, no horizontal scroll)
-  Widget _exportTable(List<LedgerTx> list) {
-    final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
-    final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
-    final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
-
-    Widget kv(String k, String v, {bool bold = false}) {
-      return Row(
-        children: [
-          Expanded(
-            child: Text(
-              k,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                color: Colors.black.withOpacity(0.70),
-              ),
-            ),
-          ),
-          Text(
-            v,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: bold ? FontWeight.w900 : FontWeight.w800,
-            ),
-          ),
-        ],
-      );
-    }
-
-    if (list.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFFFCFE0)),
-        ),
-        child: const Text("No transactions"),
-      );
-    }
-
-    Widget txCard(LedgerTx t) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFCFE0)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    t.personName,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),                  ),
-                ),
-                Text(
-                  "${_moneyFmt.format(t.totalKs)}",
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              t.description,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black.withOpacity(0.75)),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF6F8),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFFFCFE0)),
-              ),
-              child: Column(
-                children: [
-                  kv("Amount", _moneyFmt.format(t.amountKs)),
-                  const SizedBox(height: 6),
-                  kv("Commission", _moneyFmt.format(t.commissionKs)),
-                  const SizedBox(height: 8),
-                  kv("Total", _moneyFmt.format(t.totalKs), bold: true),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget totals() {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF6F8),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFCFE0)),
-        ),
-        child: Column(
-          children: [
-            kv("Total Amount", _moneyFmt.format(amountSum)),
-            const SizedBox(height: 6),
-            kv("Total Commission", _moneyFmt.format(commSum)),
-            const SizedBox(height: 10),
-            kv("Grand Total", _moneyFmt.format(totalSum), bold: true),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFFFCFE0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ...list.map(txCard),
-          totals(),
+            );
+            Widget tableWidget = export ? dt : SingleChildScrollView(scrollDirection: Axis.horizontal, child: dt);
+            tableWidget,
+            totalRow(),
         ],
       ),
     );
@@ -734,56 +604,40 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
       if (_isDepositPage(pageIndex)) {
         final slice = _depositSliceFor(pageIndex);
 
-        final Widget content = _exportMode
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                  _exportTable(slice),
-                ],
-              )
-            : SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                    _table(slice),
-                  ],
-                ),
-              );
+        final Widget content = SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
+                _table(slice),
+              ],
+            ),
+          );
 
-        return _pageContainer(
-          pageIndex: pageIndex,
-          child: content,
-        );
-      }
+          return _pageContainer(
+            pageIndex: pageIndex,
+            child: content,
+          );
+}
 
       if (_isWithdrawPage(pageIndex)) {
         final slice = _withdrawSliceFor(pageIndex);
 
-        final Widget content = _exportMode
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-                  _exportTable(slice),
-                ],
-              )
-            : SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-                    _table(slice),
-                  ],
-                ),
-              );
+        final Widget content = SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
+                _table(slice),
+              ],
+            ),
+          );
 
-        return _pageContainer(
-          pageIndex: pageIndex,
-          child: content,
-        );
-      }
+          return _pageContainer(
+            pageIndex: pageIndex,
+            child: content,
+          );
+}
 
 
     // summary page
