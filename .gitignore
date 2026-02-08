@@ -46,3 +46,4 @@ app.*.map.json
 
 # local backups
 _backup_*/
+*.BAK_*
