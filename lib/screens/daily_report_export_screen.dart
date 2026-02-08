@@ -695,7 +695,8 @@ int _currentPage = 0;
   }
 
   
-  Widget _pageContainer({required Widget child, required int pageIndex}) {
+  
+Widget _pageContainer({required Widget child, required int pageIndex}) {
     return RepaintBoundary(
       key: _pageKeys[pageIndex],
       child: LayoutBuilder(
@@ -722,38 +723,37 @@ int _currentPage = 0;
           }
 
           final w = c.maxWidth;
-            final h = c.maxHeight;
+          final h = c.maxHeight;
 
-            // Preview: use screen size
-            if (!_exportMode) return buildPaper(w, h);
+          // Preview: use screen size
+          if (!_exportMode) return buildPaper(w, h);
 
-            // Export: keep Summary same as preview (do NOT touch summary layout)
-            if (_isSummaryPage(pageIndex)) return buildPaper(w, h);
+          // Export: keep Summary same as preview (do NOT touch summary layout)
+          if (_isSummaryPage(pageIndex)) return buildPaper(w, h);
 
-            // Export: fixed A4-like portrait paper, scaled to fit screen
-            const paperW = 1000.0;
-            const paperH = 1414.0;
-            return Center(
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: paperW,
-                  height: paperH,
-                  child: buildPaper(paperW, paperH),
-                ),
+          // Export: fixed A4-like portrait paper, scaled to fit screen
+          const paperW = 1000.0;
+          const paperH = 1414.0;
+          return Center(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox(
+                width: paperW,
+                height: paperH,
+                child: buildPaper(paperW, paperH),
               ),
-            );
-},
+            ),
+          );
+        },
       ),
     );
   }
 
   Widget _buildPage(int pageIndex) {
-    if (_isDepositPage(pageIndex)) {
-      final slice = _depositSliceFor(pageIndex);
-      return _pageContainer(
-        pageIndex: pageIndex,
-        child: (_exportMode
+      if (_isDepositPage(pageIndex)) {
+        final slice = _depositSliceFor(pageIndex);
+
+        final Widget content = _exportMode
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -769,14 +769,18 @@ int _currentPage = 0;
                     _table(slice),
                   ],
                 ),
-              ));
-    }
+              );
 
-    if (_isWithdrawPage(pageIndex)) {
-      final slice = _withdrawSliceFor(pageIndex);
-      return _pageContainer(
-        pageIndex: pageIndex,
-        child: (_exportMode
+        return _pageContainer(
+          pageIndex: pageIndex,
+          child: content,
+        );
+      }
+
+      if (_isWithdrawPage(pageIndex)) {
+        final slice = _withdrawSliceFor(pageIndex);
+
+        final Widget content = _exportMode
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -792,8 +796,14 @@ int _currentPage = 0;
                     _table(slice),
                   ],
                 ),
-              ));
-    }
+              );
+
+        return _pageContainer(
+          pageIndex: pageIndex,
+          child: content,
+        );
+      }
+
 
     // summary page
     return _pageContainer(
