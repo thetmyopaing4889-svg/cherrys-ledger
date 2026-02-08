@@ -471,7 +471,18 @@ int _currentPage = 0;
       final pngBytes = byteData!.buffer.asUint8List();
 
       final decoded = img.decodePng(pngBytes);
-      final jpg = decoded == null ? pngBytes : img.encodeJpg(decoded, quality: 92);
+      late final List<int> jpg;
+
+      if (decoded == null) {
+        jpg = pngBytes; /* fallback */
+      } else if (!isSummary) {
+        /* Deposit/Withdraw: rotate bitmap back to upright landscape */
+        final rotated = img.copyRotate(decoded, angle: 90);
+        jpg = img.encodeJpg(rotated, quality: 92);
+      } else {
+        /* Summary stays portrait */
+        jpg = img.encodeJpg(decoded, quality: 92);
+      }
 
       final name = _baseFileName(pageIndex: i, pageCount: _pageCount);
       final file = File("${dir.path}/$name.jpg");
