@@ -262,8 +262,8 @@ final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-                columnSpacing: export ? 8 : 14,
-                horizontalMargin: export ? 6 : 12,
+                columnSpacing: export ? 6 : 14,
+                horizontalMargin: export ? 4 : 12,
                 headingRowHeight: 32,
                 dataRowMinHeight: export ? 30 : 36,
                 dataRowMaxHeight: export ? 48 : 52,
@@ -590,53 +590,84 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
 
           final w = c.maxWidth;
           final h = c.maxHeight;
-          // Always render pages using screen size.
-          // This makes export JPEG match preview proportions and lets the card layout use full width.
-          return buildPaper(w, h);
+            // Preview: render pages using screen size
+            if (!_exportMode) return buildPaper(w, h);
+
+            // Export: keep Summary same as preview (do NOT touch summary layout)
+            if (_isSummaryPage(pageIndex)) return buildPaper(w, h);
+
+            // Export: fixed A4-like portrait paper (bigger canvas so 5 columns fit)
+            const paperW = 1120.0;
+            const paperH = 1584.0;
+            return Center(
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: SizedBox(
+                  width: paperW,
+                  height: paperH,
+                  child: buildPaper(paperW, paperH),
+                ),
+              ),
+            );
 },
       ),
     );
   }
 
   Widget _buildPage(int pageIndex) {
-      if (_isDepositPage(pageIndex)) {
-        final slice = _depositSliceFor(pageIndex);
+    if (_isDepositPage(pageIndex)) {
+      final slice = _depositSliceFor(pageIndex);
 
-        final Widget content = SingleChildScrollView(
-            child: Column(
+      final Widget content = _exportMode
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice),
+                _table(slice, export: true),
               ],
-            ),
-          );
+            )
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
+                  _table(slice),
+                ],
+              ),
+            );
 
-          return _pageContainer(
-            pageIndex: pageIndex,
-            child: content,
-          );
-}
+      return _pageContainer(
+        pageIndex: pageIndex,
+        child: content,
+      );
+    }
 
-      if (_isWithdrawPage(pageIndex)) {
-        final slice = _withdrawSliceFor(pageIndex);
+    if (_isWithdrawPage(pageIndex)) {
+      final slice = _withdrawSliceFor(pageIndex);
 
-        final Widget content = SingleChildScrollView(
-            child: Column(
+      final Widget content = _exportMode
+          ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice),
+                _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
+                _table(slice, export: true),
               ],
-            ),
-          );
+            )
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
+                  _table(slice),
+                ],
+              ),
+            );
 
-          return _pageContainer(
-            pageIndex: pageIndex,
-            child: content,
-          );
-}
-
+      return _pageContainer(
+        pageIndex: pageIndex,
+        child: content,
+      );
+    }
 
     // summary page
     return _pageContainer(
@@ -660,23 +691,25 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(child: Text("Deposit စောင်ရေ")),
-                      Text("${widget.depositTx.length} စောင်", style: const TextStyle(fontWeight: FontWeight.w800)),
+                      Expanded(child: Text("Deposit စောင်ရေ")),
+                      Text("${widget.depositTx.length} စောင်",
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(child: Text("Withdraw စောင်ရေ")),
-                      Text("${widget.withdrawTx.length} စောင်", style: const TextStyle(fontWeight: FontWeight.w800)),
+                      Expanded(child: Text("Withdraw စောင်ရေ")),
+                      Text("${widget.withdrawTx.length} စောင်",
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(child: Text("Total စောင်ရေ")),
+                      Expanded(child: Text("Total စောင်ရေ")),
                       Text("${widget.depositTx.length + widget.withdrawTx.length} စောင်",
                           style: const TextStyle(fontWeight: FontWeight.w900)),
                     ],
@@ -689,6 +722,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
       ),
     );
   }
+
 
   Future<void> _exportAndShare() async {
     if (_exporting) return;
