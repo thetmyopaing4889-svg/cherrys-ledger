@@ -191,23 +191,51 @@ int _currentPage = 0;
     );
   }
 
-  Widget _table(List<LedgerTx> list, {bool export = false}) {
-    final cellFont = export ? 10.5 : 12.0;
-    final boldFont = export ? 10.5 : 12.0;
-
+    Widget _table(List<LedgerTx> list, {bool export = false}) {
+    // Export-only tuning:
+    // - NO wrapping (single line) for headers + key cells to avoid stacked text
+    // - Smaller export font so 5 columns fit in one page
+    // - Total column data MUST match amount/commission (no larger font)
     final headerStyle = TextStyle(
-      fontSize: 12,
+      fontSize: export ? 11.0 : 12.0,
       fontWeight: FontWeight.w900,
       color: Colors.black.withOpacity(0.65),
     );
-    final cellStyle = TextStyle(fontSize: cellFont, fontWeight: FontWeight.w700);
+
+    final cellStyle = TextStyle(
+      fontSize: export ? 10.5 : 12.0,
+      fontWeight: FontWeight.w700,
+      color: Colors.black.withOpacity(0.88),
+    );
+
+    Text headerText(String t) => Text(
+          t,
+          style: headerStyle,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+        );
+
+    Text cellText(String t, {TextAlign align = TextAlign.left, bool ellipsisWhenExport = true}) => Text(
+          t,
+          style: cellStyle,
+          textAlign: align,
+          maxLines: export && ellipsisWhenExport ? 1 : null,
+          softWrap: export && ellipsisWhenExport ? false : true,
+          overflow: export && ellipsisWhenExport ? TextOverflow.ellipsis : TextOverflow.clip,
+        );
 
     final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
     final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
     final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
 
     Widget totalRow() {
-      final bold = TextStyle(fontSize: boldFont, fontWeight: FontWeight.w900);
+      final bold = TextStyle(
+        fontSize: export ? 11.0 : 12.0,
+        fontWeight: FontWeight.w900,
+        color: Colors.black.withOpacity(0.90),
+      );
+
       return Padding(
         padding: const EdgeInsets.only(top: 10),
         child: Container(
@@ -220,21 +248,9 @@ int _currentPage = 0;
           child: Row(
             children: [
               Expanded(flex: 2, child: Text("Total", style: bold)),
-              Expanded(
-                flex: 2,
-                child: Text(_moneyFmt.format(amountSum),
-                    style: bold, textAlign: TextAlign.right),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(_moneyFmt.format(commSum),
-                    style: bold, textAlign: TextAlign.right),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(_moneyFmt.format(totalSum),
-                    style: bold, textAlign: TextAlign.right),
-              ),
+              Expanded(flex: 2, child: Text(_moneyFmt.format(amountSum), style: bold, textAlign: TextAlign.right)),
+              Expanded(flex: 2, child: Text(_moneyFmt.format(commSum), style: bold, textAlign: TextAlign.right)),
+              Expanded(flex: 2, child: Text(_moneyFmt.format(totalSum), style: bold, textAlign: TextAlign.right)),
             ],
           ),
         ),
@@ -253,6 +269,34 @@ int _currentPage = 0;
       );
     }
 
+    final dt = DataTable(
+      columnSpacing: export ? 6 : 14,
+      horizontalMargin: export ? 4 : 12,
+      headingRowHeight: 32,
+      dataRowMinHeight: export ? 30 : 36,
+      dataRowMaxHeight: export ? 48 : 52,
+      columns: [
+        DataColumn(label: headerText("နာမည်")),
+        DataColumn(label: headerText("အကြောင်းအရာ")),
+        DataColumn(label: headerText("ငွေပမာဏ"), numeric: true),
+        DataColumn(label: headerText("ကော်မရှင်"), numeric: true),
+        DataColumn(label: headerText("စုစုပေါင်းငွေ"), numeric: true),
+      ],
+      rows: list.map((t) {
+        return DataRow(
+          cells: [
+            // Export: single line + ellipsis (avoid stacked names)
+            DataCell(cellText(t.personName, ellipsisWhenExport: true)),
+            DataCell(cellText(t.description, ellipsisWhenExport: true)),
+            DataCell(cellText(_moneyFmt.format(t.amountKs), align: TextAlign.right, ellipsisWhenExport: false)),
+            DataCell(cellText(_moneyFmt.format(t.commissionKs), align: TextAlign.right, ellipsisWhenExport: false)),
+            // IMPORTANT: total column data uses SAME style/size as amount/commission (no extra bold)
+            DataCell(cellText(_moneyFmt.format(t.totalKs), align: TextAlign.right, ellipsisWhenExport: false)),
+          ],
+        );
+      }).toList(),
+    );
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -262,41 +306,21 @@ int _currentPage = 0;
       ),
       child: Column(
         children: [
-          Builder(builder: (_) { final dt = DataTable(
-              columnSpacing: export ? 8 : 14,
-                horizontalMargin: export ? 6 : 12,
-              headingRowHeight: export ? 30 : 32,
-              dataRowMinHeight: export ? 32 : 36,
-              dataRowMaxHeight: export ? 48 : 52,
-              columns: [
-                DataColumn(label: Text("နာမည်", style: headerStyle, softWrap: true, overflow: TextOverflow.visible)),
-                DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle, softWrap: true, overflow: TextOverflow.visible)),
-                DataColumn(label: Text("ငွေပမာဏ", style: headerStyle, softWrap: true, overflow: TextOverflow.visible), numeric: true),
-                DataColumn(label: Text("ကော်မရှင်", style: headerStyle, softWrap: true, overflow: TextOverflow.visible), numeric: true),
-                DataColumn(label: Text("စုစုပေါင်းငွေ", style: headerStyle, softWrap: true, overflow: TextOverflow.visible), numeric: true),
-              ],
-              rows: list.map((t) {
-                return DataRow(
-                  cells: [
-                    DataCell(Text(t.personName, style: cellStyle)),
-                    DataCell(Text(t.description, style: cellStyle)),
-                    DataCell(Text(_moneyFmt.format(t.amountKs), style: cellStyle)),
-                    DataCell(Text(_moneyFmt.format(t.commissionKs), style: cellStyle)),
-                    DataCell(Text(
-                      _moneyFmt.format(t.totalKs),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
-                    )),
-                  ],
-                );
-              }).toList(),
-            ); return export ? dt : SingleChildScrollView(scrollDirection: Axis.horizontal, child: dt); }),
-            totalRow(),
+          // Preview: allow horizontal scroll as before
+          // Export: NO scroll (so image captures everything) + smaller font above should fit
+          export
+              ? dt
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: dt,
+                ),
+          totalRow(),
         ],
       ),
     );
   }
 
-  Widget _summaryCard() {
+Widget _summaryCard() {
     Widget row(String label, String value, {bool bold = false}) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
