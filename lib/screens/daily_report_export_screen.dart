@@ -120,6 +120,16 @@ int _currentPage = 0;
 
   bool _isWithdrawPage(int pageIndex) => pageIndex >= _depCount && pageIndex < _depCount + _wdCount;
 
+  bool _isLastTxPageOfSection(int pageIndex) {
+    // Deposit section: pages [0 .. _depCount-1]
+    // Withdraw section: pages [_depCount .. _depCount+_wdCount-1]
+    if (_isWithdrawPage(pageIndex)) {
+      return pageIndex == (_depCount + _wdCount - 1);
+    }
+    return pageIndex == (_depCount - 1);
+  }
+
+
   bool _isSummaryPage(int pageIndex) => pageIndex == _pageCount - 1;
 
   List<LedgerTx> _depositSliceFor(int pageIndex) {
@@ -191,7 +201,7 @@ int _currentPage = 0;
     );
   }
 
-    Widget _table(List<LedgerTx> list, {bool export = false}) {
+    Widget _table(List<LedgerTx> list, {bool export = false, bool showTotal = true}) {
     // Export-only tuning:
     // - NO wrapping (single line) for headers + key cells to avoid stacked text
     // - Smaller export font so 5 columns fit in one page
@@ -314,7 +324,7 @@ int _currentPage = 0;
                   scrollDirection: Axis.horizontal,
                   child: dt,
                 ),
-          totalRow(),
+          if (showTotal) totalRow(),
         ],
       ),
     );
@@ -631,7 +641,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice, export: _exportMode),
+                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex)),
               ],
             ),
           );
@@ -650,7 +660,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-                _table(slice, export: _exportMode),
+                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex)),
               ],
             ),
           );
