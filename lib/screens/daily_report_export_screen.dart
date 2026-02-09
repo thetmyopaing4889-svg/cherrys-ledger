@@ -269,11 +269,11 @@ int _currentPage = 0;
               dataRowMinHeight: export ? 32 : 36,
               dataRowMaxHeight: export ? 48 : 52,
               columns: [
-                DataColumn(label: Text("နာမည်", style: headerStyle)),
-                DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle)),
-                DataColumn(label: Text("ငွေပမာဏ", style: headerStyle), numeric: true),
-                DataColumn(label: Text("ကော်မရှင်", style: headerStyle), numeric: true),
-                DataColumn(label: Text("စုစုပေါင်းငွေ", style: headerStyle), numeric: true),
+                DataColumn(label: Text("နာမည်", style: headerStyle, softWrap: true, overflow: TextOverflow.visible)),
+                DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle, softWrap: true, overflow: TextOverflow.visible)),
+                DataColumn(label: Text("ငွေပမာဏ", style: headerStyle, softWrap: true, overflow: TextOverflow.visible), numeric: true),
+                DataColumn(label: Text("ကော်မရှင်", style: headerStyle, softWrap: true, overflow: TextOverflow.visible), numeric: true),
+                DataColumn(label: Text("စုစုပေါင်းငွေ", style: headerStyle, softWrap: true, overflow: TextOverflow.visible), numeric: true),
               ],
               rows: list.map((t) {
                 return DataRow(
@@ -607,7 +607,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice),
+                _table(slice, export: _exportMode),
               ],
             ),
           );
@@ -626,7 +626,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice),
+                _table(slice, export: _exportMode),
               ],
             ),
           );
