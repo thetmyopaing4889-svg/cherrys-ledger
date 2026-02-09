@@ -192,19 +192,29 @@ int _currentPage = 0;
   }
 
   Widget _table(List<LedgerTx> list, {bool export = false}) {
-
     final headerStyle = TextStyle(
-      fontSize: 12,
+      fontSize: 12, // header မသေး
       fontWeight: FontWeight.w900,
       color: Colors.black.withOpacity(0.65),
     );
-    final cellStyle = TextStyle(fontSize: export ? 10.5 : 12.0, fontWeight: FontWeight.w700);
-final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
+
+    final cellStyle = TextStyle(
+      fontSize: export ? 10.5 : 12.0, // export row တွေပဲ သေး
+      fontWeight: FontWeight.w700,
+      color: Colors.black.withOpacity(0.88),
+    );
+
+    final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
     final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
     final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
 
     Widget totalRow() {
-      final bold = TextStyle(fontSize: export ? 11.0 : 12.0, fontWeight: FontWeight.w900);
+      final bold = TextStyle(
+        fontSize: export ? 11.0 : 12.0,
+        fontWeight: FontWeight.w900,
+        color: Colors.black.withOpacity(0.90),
+      );
+
       return Padding(
         padding: const EdgeInsets.only(top: 10),
         child: Container(
@@ -219,18 +229,15 @@ final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
               Expanded(flex: 2, child: Text("Total", style: bold)),
               Expanded(
                 flex: 2,
-                child: Text(_moneyFmt.format(amountSum),
-                    style: bold, textAlign: TextAlign.right),
+                child: Text(_moneyFmt.format(amountSum), style: bold, textAlign: TextAlign.right),
               ),
               Expanded(
                 flex: 2,
-                child: Text(_moneyFmt.format(commSum),
-                    style: bold, textAlign: TextAlign.right),
+                child: Text(_moneyFmt.format(commSum), style: bold, textAlign: TextAlign.right),
               ),
               Expanded(
                 flex: 2,
-                child: Text(_moneyFmt.format(totalSum),
-                    style: bold, textAlign: TextAlign.right),
+                child: Text(_moneyFmt.format(totalSum), style: bold, textAlign: TextAlign.right),
               ),
             ],
           ),
@@ -250,6 +257,32 @@ final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
       );
     }
 
+    final dt = DataTable(
+      columnSpacing: export ? 6 : 14,
+      horizontalMargin: export ? 4 : 12,
+      headingRowHeight: 32,
+      dataRowMinHeight: export ? 30 : 36,
+      dataRowMaxHeight: export ? 48 : 52,
+      columns: [
+        DataColumn(label: Text("နာမည်", style: headerStyle)),
+        DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle)),
+        DataColumn(label: Text("ငွေပမာဏ", style: headerStyle), numeric: true),
+        DataColumn(label: Text("ကော်မရှင်", style: headerStyle), numeric: true),
+        DataColumn(label: Text("စုစုပေါင်းငွေ", style: headerStyle), numeric: true),
+      ],
+      rows: list.map((t) {
+        return DataRow(
+          cells: [
+            DataCell(Text(t.personName, style: cellStyle)),
+            DataCell(Text(t.description, style: cellStyle)),
+            DataCell(Text(_moneyFmt.format(t.amountKs), style: cellStyle)),
+            DataCell(Text(_moneyFmt.format(t.commissionKs), style: cellStyle)),
+            DataCell(Text(_moneyFmt.format(t.totalKs), style: cellStyle.copyWith(fontWeight: FontWeight.w800))),
+          ],
+        );
+      }).toList(),
+    );
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -259,46 +292,19 @@ final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
       ),
       child: Column(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: double.infinity),
-                child: DataTable(
-                columnSpacing: export ? 6 : 14,
-                horizontalMargin: export ? 4 : 12,
-                headingRowHeight: 32,
-                dataRowMinHeight: export ? 30 : 36,
-                dataRowMaxHeight: export ? 48 : 52,
-              columns: [
-                DataColumn(label: Text("နာမည်", style: headerStyle)),
-                DataColumn(label: Text("အကြောင်းအရာ", style: headerStyle)),
-                DataColumn(label: Text("ငွေပမာဏ", style: headerStyle), numeric: true),
-                DataColumn(label: Text("ကော်မရှင်", style: headerStyle), numeric: true),
-                DataColumn(label: Text("စုစုပေါင်းငွေ", style: headerStyle), numeric: true),
-              ],
-              rows: list.map((t) {
-                return DataRow(
-                  cells: [
-                    DataCell(Text(t.personName, style: cellStyle)),
-                    DataCell(Text(t.description, style: cellStyle)),
-                    DataCell(Text(_moneyFmt.format(t.amountKs), style: cellStyle)),
-                    DataCell(Text(_moneyFmt.format(t.commissionKs), style: cellStyle)),
-                    DataCell(Text(
-                      _moneyFmt.format(t.totalKs),
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
-                    )),
-                  ],
-                );
-              }).toList(),
-            ),
-          )),
-            totalRow(),
+          export
+              ? dt
+              : SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: dt,
+                ),
+          totalRow(),
         ],
       ),
     );
   }
 
-  Widget _summaryCard() {
+Widget _summaryCard() {
     Widget row(String label, String value, {bool bold = false}) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
@@ -591,10 +597,15 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
           }
 
           final w = c.maxWidth;
-          final h = c.maxHeight;
-            // Preview: render pages using screen size
+            final h = c.maxHeight;
+
+            // Preview uses screen size (avoid clipping)
             if (!_exportMode) return buildPaper(w, h);
 
+            // Export uses bigger canvas to fit 5 columns
+            const paperW = 1400.0;
+            const paperH = 1980.0;
+            return buildPaper(paperW, paperH);
             // Export: keep Summary same as preview (do NOT touch summary layout)
             if (_isSummaryPage(pageIndex)) return buildPaper(w, h);
 
