@@ -261,7 +261,9 @@ final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
         children: [
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
-            child: DataTable(
+            child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: double.infinity),
+                child: DataTable(
                 columnSpacing: export ? 6 : 14,
                 horizontalMargin: export ? 4 : 12,
                 headingRowHeight: 32,
@@ -289,8 +291,8 @@ final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
                 );
               }).toList(),
             ),
-          ),
-          totalRow(),
+          )),
+            totalRow(),
         ],
       ),
     );
