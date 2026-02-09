@@ -649,7 +649,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.green),
+                _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
                 _table(slice, export: _exportMode),
               ],
             ),
