@@ -302,8 +302,8 @@ bool _isLastTxPageOfSection(int pageIndex) {
     }
 
     final dt = DataTable(
-      columnSpacing: export ? 12 : 14,
-      horizontalMargin: export ? 12 : 12,
+      columnSpacing: export ? 8 : 14,
+      horizontalMargin: export ? 8 : 12,
       headingRowHeight: 32,
       dataRowMinHeight: export ? 30 : 36,
       dataRowMaxHeight: export ? 48 : 52,
@@ -344,10 +344,14 @@ bool _isLastTxPageOfSection(int pageIndex) {
               ? LayoutBuilder(
                   builder: (context, constraints) {
                     // Export page width အပြည့်ဖြည့်
-                    return ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                      child: dt,
-                    );
+                    return FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.topLeft,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                child: dt,
+                              ),
+                            );
                   },
                 )
               : SingleChildScrollView(
@@ -828,11 +832,19 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
       body: Column(
         children: [
           Expanded(
-            child: PageView.builder(
+            child: _exportMode
+            ? PageView.builder(
               controller: _pc,
               itemCount: _pageCount,
               onPageChanged: (i) => setState(() => _currentPage = i),
               itemBuilder: (_, i) => _buildPage(i),
+            )
+            : ListView.builder(
+              itemCount: _pageCount,
+              itemBuilder: (context, i) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildPage(i),
+              ),
             ),
           ),
           Container(
