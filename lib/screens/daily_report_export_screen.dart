@@ -851,14 +851,27 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
         children: [
           Expanded(
             child: _exportMode
-            ? PageView.builder(
-              controller: _pc,
+            ? Stack(
+                children: [
+                  PageView.builder(controller: _pc,
               itemCount: _pageCount,
               onPageChanged: (i) => setState(() => _currentPage = i),
-              itemBuilder: (_, i) => _buildPage(i),
-            )
-            : ListView.builder(
-              itemCount: _pageCount,
+              itemBuilder: (_, i) => _buildPage(i),),
+                  // Prebuild ALL pages offstage so RepaintBoundary keys have contexts for export capture.
+                  Offstage(
+                    offstage: true,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: List.generate(
+                          _pageCount,
+                          (i) => _buildPage(i),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : ListView.builder(itemCount: _pageCount,
               itemBuilder: (context, i) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _buildPage(i),
