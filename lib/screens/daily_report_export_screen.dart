@@ -667,25 +667,53 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
   }
 
   Widget _buildPage(int pageIndex) {
-      if (_isDepositPage(pageIndex)) {
-        final slice = _depositSliceFor(pageIndex);
+    if (_isDepositPage(pageIndex)) {
+      final slice = _depositSliceFor(pageIndex);
 
-        final Widget content = SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice, export: _exportMode, showTotal: _isLastTxPageOfSection(pageIndex), totalFrom: _allWithdrawTxs()),
-              ],
+      final Widget content = SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
+            _table(
+              slice,
+              export: _exportMode,
+              showTotal: _isLastTxPageOfSection(pageIndex),
+              totalFrom: _allDepositTxs(),
             ),
-          );
+          ],
+        ),
+      );
 
-          return _pageContainer(
-            pageIndex: pageIndex,
-            child: content,
-          );
-}
+      return _pageContainer(
+        pageIndex: pageIndex,
+        child: content,
+      );
+    }
 
+    if (_isWithdrawPage(pageIndex)) {
+      final slice = _withdrawSliceFor(pageIndex);
+
+      final Widget content = SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
+            _table(
+              slice,
+              export: _exportMode,
+              showTotal: _isLastTxPageOfSection(pageIndex),
+              totalFrom: _allWithdrawTxs(),
+            ),
+          ],
+        ),
+      );
+
+      return _pageContainer(
+        pageIndex: pageIndex,
+        child: content,
+      );
+    }
 
     // summary page
     return _pageContainer(
@@ -710,7 +738,8 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Expanded(child: Text("Deposit စောင်ရေ")),
-                      Text("${widget.depositTx.length} စောင်", style: const TextStyle(fontWeight: FontWeight.w800)),
+                      Text("${widget.depositTx.length} စောင်",
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -718,7 +747,8 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Expanded(child: Text("Withdraw စောင်ရေ")),
-                      Text("${widget.withdrawTx.length} စောင်", style: const TextStyle(fontWeight: FontWeight.w800)),
+                      Text("${widget.withdrawTx.length} စောင်",
+                          style: const TextStyle(fontWeight: FontWeight.w800)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -726,8 +756,10 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Expanded(child: Text("Total စောင်ရေ")),
-                      Text("${widget.depositTx.length + widget.withdrawTx.length} စောင်",
-                          style: const TextStyle(fontWeight: FontWeight.w900)),
+                      Text(
+                        "${widget.depositTx.length + widget.withdrawTx.length} စောင်",
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ],
                   ),
                 ],
@@ -737,7 +769,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
         ),
       ),
     );
-  }
+}
 
   Future<void> _exportAndShare() async {
     if (_exporting) return;
