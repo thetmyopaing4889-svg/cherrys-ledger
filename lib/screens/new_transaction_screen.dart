@@ -4,9 +4,10 @@ import '../models/ledger_tx.dart';
 
 class NewTransactionScreen extends StatefulWidget {
   final String bossId;
-  const NewTransactionScreen({super.key, required this.bossId});
+  final LedgerTx? existing;
 
-  @override
+  const NewTransactionScreen({super.key, required this.bossId, this.existing});
+@override
   State<NewTransactionScreen> createState() => _NewTransactionScreenState();
 }
 
@@ -39,10 +40,21 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
   void initState() {
     super.initState();
     txStore.load();
-    _seqNo = txStore.nextSeqNo(widget.bossId);
 
-    // Normalize date to midnight for reporting
-    _date = DateTime(_date.year, _date.month, _date.day);
+    final ex = widget.existing;
+    if (ex != null) {
+      _date = DateTime.fromMillisecondsSinceEpoch(ex.dateMs);
+      _date = DateTime(_date.year, _date.month, _date.day);
+      _seqNo = ex.seqNo;
+      _type = ex.type;
+      _desc.text = ex.description;
+      _name.text = ex.personName;
+      _amount.text = ex.amountKs.toString();
+      _comm.text = ex.commissionKs.toString();
+    } else {
+      _seqNo = txStore.nextSeqNo(widget.bossId);
+      _date = DateTime(_date.year, _date.month, _date.day);
+    }
 
     _amount.addListener(_rebuild);
     _comm.addListener(_rebuild);
@@ -119,8 +131,7 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    final id = "t_$now";
-
+    final id = widget.existing?.id ?? "t_$now";
     final tx = LedgerTx(
       id: id,
       bossId: widget.bossId,
@@ -135,7 +146,11 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
       deleted: false,
     );
 
-    await txStore.addTx(tx);
+    if (widget.existing != null) {
+      await txStore.updateTx(tx);
+    } else {
+      await txStore.addTx(tx);
+    }
     if (mounted) Navigator.pop(context);
   }
 
@@ -145,8 +160,8 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "New Transaction",
+        title: Text(
+          widget.existing != null ? "Edit Transaction" : "New Transaction",
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         centerTitle: true,

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'daily_report_export_screen.dart';
 
+import 'new_transaction_screen.dart';
 class DailyReportScreen extends StatefulWidget {
   final String bossId;
   final String bossName;
@@ -207,7 +208,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
-              columnSpacing: 14,
+                showCheckboxColumn: false,
+                columnSpacing: 14,
               headingRowHeight: 32,
               dataRowMinHeight: 36,
               dataRowMaxHeight: 52,
@@ -220,7 +222,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
               ],
               rows: list.map((t) {
                 return DataRow(
-                  cells: [
+                    onSelectChanged: (_) => _showTxActions(t),
+                    cells: [
                     DataCell(Text(t.personName, style: cellStyle)),
                     DataCell(Text(t.description, style: cellStyle)),
                     DataCell(Text(moneyFmt.format(t.amountKs), style: cellStyle)),
@@ -241,6 +244,68 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
       ),
     );
   }
+
+  Future<void> _showTxActions(LedgerTx t) async {
+
+    showModalBottomSheet(
+
+      context: context,
+
+      showDragHandle: true,
+
+      builder: (_) {
+
+        return SafeArea(
+
+          child: Column(
+
+            mainAxisSize: MainAxisSize.min,
+
+            children: [
+
+              ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text("Edit"),
+              onTap: () async {
+                Navigator.pop(context);
+
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NewTransactionScreen(
+                      bossId: widget.bossId,
+                      existing: t,
+                    ),
+                  ),
+                );
+
+                if (mounted) setState(() {});
+              },
+            ),
+
+              ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text("Delete"),
+              onTap: () async {
+                Navigator.pop(context);
+                await txStore.softDelete(t.id);
+                if (mounted) setState(() {});
+              },
+            ),
+
+              const SizedBox(height: 8),
+
+            ],
+
+          ),
+
+        );
+
+      },
+
+    );
+
+  }
+
 
   Widget summaryRow(String label, int value, {bool bold = false}) {
     return Padding(

@@ -69,5 +69,21 @@ class TxStore extends ChangeNotifier {
     }
   }
 
+
+  Future<void> updateTx(LedgerTx t) async {
+
+    final idx = _txs.indexWhere((x) => x.id == t.id);
+
+    if (idx < 0) return;
+
+    _txs[idx] = t;
+
+    await _save();
+
+    notifyListeners();
+
+  }
+
+
   // For future: edit/update, etc.
 }
