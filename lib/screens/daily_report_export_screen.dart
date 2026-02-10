@@ -853,10 +853,14 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
             child: _exportMode
             ? Stack(
                 children: [
-                  PageView.builder(controller: _pc,
-              itemCount: _pageCount,
+                  PageView(
+              controller: _pc,
               onPageChanged: (i) => setState(() => _currentPage = i),
-              itemBuilder: (_, i) => _buildPage(i),),
+              children: List.generate(
+                _pageCount,
+                (i) => _buildPage(i),
+              ),
+            ),
                   // Prebuild ALL pages offstage so RepaintBoundary keys have contexts for export capture.
                   Offstage(
                     offstage: true,
