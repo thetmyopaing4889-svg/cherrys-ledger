@@ -344,11 +344,15 @@ bool _isLastTxPageOfSection(int pageIndex) {
               ? LayoutBuilder(
                   builder: (context, constraints) {
                     // Export page width အပြည့်ဖြည့်
-                    return ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                      child: dt,
+                    return FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                        child: dt,
+                      ),
                     );
-                  },
+},
                 )
               : SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -671,26 +675,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex), totalFrom: _exportMode ? _allDepositTxs() : null),
-              ],
-            ),
-          );
-
-          return _pageContainer(
-            pageIndex: pageIndex,
-            child: content,
-          );
-}
-
-      if (_isWithdrawPage(pageIndex)) {
-        final slice = _withdrawSliceFor(pageIndex);
-
-        final Widget content = SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex), totalFrom: _exportMode ? _allWithdrawTxs() : null),
+                _table(slice, export: _exportMode, showTotal: _isLastTxPageOfSection(pageIndex), totalFrom: _allWithdrawTxs()),
               ],
             ),
           );
