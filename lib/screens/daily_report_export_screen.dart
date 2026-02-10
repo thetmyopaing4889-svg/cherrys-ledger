@@ -318,8 +318,8 @@ bool _isLastTxPageOfSection(int pageIndex) {
         return DataRow(
           cells: [
             // Export: single line + ellipsis (avoid stacked names)
-            DataCell(cellText(t.personName, ellipsisWhenExport: true)),
-            DataCell(cellText(t.description, ellipsisWhenExport: true)),
+            DataCell(export ? FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: cellText(t.personName, ellipsisWhenExport: true)) : cellText(t.personName, ellipsisWhenExport: true)),
+            DataCell(export ? FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: cellText(t.description, ellipsisWhenExport: true)) : cellText(t.description, ellipsisWhenExport: true)),
             DataCell(cellText(_moneyFmt.format(t.amountKs), align: TextAlign.right, ellipsisWhenExport: false)),
             DataCell(cellText(_moneyFmt.format(t.commissionKs), align: TextAlign.right, ellipsisWhenExport: false)),
             // IMPORTANT: total column data uses SAME style/size as amount/commission (no extra bold)
@@ -344,11 +344,15 @@ bool _isLastTxPageOfSection(int pageIndex) {
               ? LayoutBuilder(
                   builder: (context, constraints) {
                     // Export page width အပြည့်ဖြည့်
-                    return ConstrainedBox(
-                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                      child: dt,
-                    );
-                  },
+                    return FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.topLeft,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                          child: dt,
+                        ),
+                      );
+},
                 )
               : SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -828,13 +832,51 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
       body: Column(
         children: [
           Expanded(
-            child: PageView.builder(
-              controller: _pc,
-              itemCount: _pageCount,
-              onPageChanged: (i) => setState(() => _currentPage = i),
-              itemBuilder: (_, i) => _buildPage(i),
+              child: Stack(
+                children: [
+                  // (Hidden) Keep PageView in the tree for export capture (PageController must stay attached).
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.0,
+                        child: PageView.builder(
+                          controller: _pc,
+                          itemCount: _pageCount,
+                          onPageChanged: (i) => setState(() => _currentPage = i),
+                          itemBuilder: (_, i) => _buildPage(i),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Preview UI (scrollable)
+                  Positioned.fill(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _header(),
+
+                          _sectionTitle("Total Deposit", const Color(0xFF16A34A)),
+                          _table(widget.depositTx, export: false, showTotal: true),
+
+                          const SizedBox(height: 12),
+
+                          _sectionTitle("Total Withdraw", const Color(0xFFDC2626)),
+                          _table(widget.withdrawTx, export: false, showTotal: true),
+
+                          const SizedBox(height: 12),
+
+                          _summaryCard(),
+                          const SizedBox(height: 8),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
           Container(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             color: Colors.white,
