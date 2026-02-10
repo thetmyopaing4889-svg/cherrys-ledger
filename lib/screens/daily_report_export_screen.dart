@@ -50,6 +50,24 @@ class _DailyReportExportScreenState extends State<DailyReportExportScreen> {
 
   bool _exporting = false;
 
+
+  Future<void> _runWithExportLock(Future<void> Function() job) async {
+    if (_exporting) return;
+    if (mounted) setState(() => _exporting = true);
+    try {
+      await job();
+    } catch (e, st) {
+      debugPrint("EXPORT ERROR: $e\n$st");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Export error: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   bool _exportMode = false;
 
 
@@ -818,12 +836,12 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
         actions: [
           IconButton(
             tooltip: "Save JPEG to Gallery",
-              onPressed: _exporting ? null : _saveAllToGallery,
+              onPressed: _exporting ? null : () => _runWithExportLock(_saveAllToGallery),
               icon: const Icon(Icons.photo_library),
           ),
           IconButton(
             tooltip: "Share Excel",
-              onPressed: _exporting ? null : _shareExcel,
+              onPressed: _exporting ? null : () => _runWithExportLock(_shareExcel),
             icon: const Icon(Icons.table_chart),
           ),
           const SizedBox(width: 6),
@@ -854,7 +872,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _exporting ? null : _shareAllPagesAsJpeg,
+                    onPressed: _exporting ? null : () => _runWithExportLock(_shareAllPagesAsJpeg),
                     icon: const Icon(Icons.ios_share),
                     label: Text(_exporting ? "Exporting..." : "Share JPEG (All Pages)"),
                   ),
@@ -862,7 +880,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _exporting ? null : _shareExcel,
+                    onPressed: _exporting ? null : () => _runWithExportLock(_shareExcel),
                     icon: const Icon(Icons.table_chart),
                     label: const Text("Share Excel"),
                   ),
