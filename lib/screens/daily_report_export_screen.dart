@@ -120,7 +120,24 @@ int _currentPage = 0;
 
   bool _isWithdrawPage(int pageIndex) => pageIndex >= _depCount && pageIndex < _depCount + _wdCount;
 
-  bool _isLastTxPageOfSection(int pageIndex) {
+  
+  List<LedgerTx> _allDepositTxs() {
+    final out = <LedgerTx>[];
+    for (var i = 0; i < _depCount; i++) {
+      out.addAll(_depositSliceFor(i));
+    }
+    return out;
+  }
+
+  List<LedgerTx> _allWithdrawTxs() {
+    final out = <LedgerTx>[];
+    for (var p = _depCount; p < _depCount + _wdCount; p++) {
+      out.addAll(_withdrawSliceFor(p));
+    }
+    return out;
+  }
+
+bool _isLastTxPageOfSection(int pageIndex) {
     // Deposit section: pages [0 .. _depCount-1]
     // Withdraw section: pages [_depCount .. _depCount+_wdCount-1]
     if (_isWithdrawPage(pageIndex)) {
@@ -201,7 +218,7 @@ int _currentPage = 0;
     );
   }
 
-    Widget _table(List<LedgerTx> list, {bool export = false, bool showTotal = true}) {
+    Widget _table(List<LedgerTx> list, {bool export = false, bool showTotal = true, List<LedgerTx>? totalFrom}) {
     // Export-only tuning:
     // - NO wrapping (single line) for headers + key cells to avoid stacked text
     // - Smaller export font so 5 columns fit in one page
@@ -235,9 +252,14 @@ int _currentPage = 0;
           overflow: export && ellipsisWhenExport ? TextOverflow.ellipsis : TextOverflow.clip,
         );
 
-    final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
-    final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
-    final totalSum = list.fold<int>(0, (s, t) => s + t.totalKs);
+    final sumList = totalFrom ?? list;
+
+    final srcForTotal = totalFrom ?? list;
+
+
+    final amountSum = sumList.fold<int>(0, (s, t) => s + t.amountKs);
+    final commSum = sumList.fold<int>(0, (s, t) => s + t.commissionKs);
+    final totalSum = sumList.fold<int>(0, (s, t) => s + t.totalKs);
 
     Widget totalRow() {
       final bold = TextStyle(
@@ -280,8 +302,8 @@ int _currentPage = 0;
     }
 
     final dt = DataTable(
-      columnSpacing: export ? 6 : 14,
-      horizontalMargin: export ? 4 : 12,
+      columnSpacing: export ? 12 : 14,
+      horizontalMargin: export ? 12 : 12,
       headingRowHeight: 32,
       dataRowMinHeight: export ? 30 : 36,
       dataRowMaxHeight: export ? 48 : 52,
@@ -319,7 +341,15 @@ int _currentPage = 0;
           // Preview: allow horizontal scroll as before
           // Export: NO scroll (so image captures everything) + smaller font above should fit
           export
-              ? dt
+              ? LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Export page width အပြည့်ဖြည့်
+                    return ConstrainedBox(
+                      constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                      child: dt,
+                    );
+                  },
+                )
               : SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: dt,
@@ -641,7 +671,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Deposit (ဒီနေ့အဝင်)", Colors.green),
-                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex)),
+                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex), totalFrom: _exportMode ? _allDepositTxs() : null),
               ],
             ),
           );
@@ -660,7 +690,7 @@ Widget _pageContainer({required Widget child, required int pageIndex}) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _sectionTitle("Total Withdraw (ဒီနေ့အထွက်)", Colors.red),
-                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex)),
+                _table(slice, export: _exportMode, showTotal: !_exportMode || _isLastTxPageOfSection(pageIndex), totalFrom: _exportMode ? _allWithdrawTxs() : null),
               ],
             ),
           );
