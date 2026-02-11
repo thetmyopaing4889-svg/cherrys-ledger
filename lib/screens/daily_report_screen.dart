@@ -33,8 +33,10 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
   void initState() {
     super.initState();
     txStore.load().then((_) {
-      bossStore.load().then((_) {
-      if (mounted) setState(() {});      });
+        bossStore.load().then((_) {
+          _reloadForSelectedDay();
+        });
+      });
     });
   }
 
@@ -97,19 +99,20 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     int get closingBalance => subTotal - totalWithdraw;
 
   Future<void> pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
-    );
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: selectedDate,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+      );
 
-    if (picked != null) {
-      setState(() => selectedDate = picked);
-      if (mounted) setState(() {});
-    }  }
+      if (picked != null) {
+        setState(() => selectedDate = picked);
+        _reloadForSelectedDay();
+      }
+    }
 
-  Widget sectionTitle(String text, Color color) {
+Widget sectionTitle(String text, Color color) {
     return Padding(
       padding: const EdgeInsets.only(top: 18, bottom: 8),
       child: Text(
@@ -259,15 +262,15 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                   Navigator.pop(context);
 
                   await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => NewTransactionScreen(
-                        bossId: widget.bossId,
-                        existing: t,
+                      MaterialPageRoute(
+                        builder: (_) => NewTransactionScreen(
+                          bossId: widget.bossId,
+                          existing: t,
+                        ),
                       ),
-                    ),
-                  );
+                    );
 
-                  _reloadForSelectedDay();
+                    _reloadForSelectedDay();
                 },
               ),
               ListTile(
@@ -295,9 +298,9 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                   );
 
                   if (ok == true) {
-                    await txStore.softDelete(t.id);
-                    _reloadForSelectedDay();
-                  }
+                      await txStore.softDelete(t.id);
+                      _reloadForSelectedDay();
+                    }
                 },
               ),
               const SizedBox(height: 8),
