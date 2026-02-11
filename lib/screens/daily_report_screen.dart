@@ -33,9 +33,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
   void initState() {
     super.initState();
     txStore.load().then((_) {
-        bossStore.load().then((_) {
-          _reloadForSelectedDay();
-        });
+      bossStore.load().then((_) {
+        _reloadForSelectedDay();
       });
     });
   }
@@ -66,53 +65,53 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
   }
 
   void _reloadForSelectedDay() {
-      final d = selectedDate;
-      final start = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
-      final end = start + const Duration(days: 1).inMilliseconds;
+    final d = selectedDate;
+    final start = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
+    final end = start + const Duration(days: 1).inMilliseconds;
 
-      allTx = txStore
-          .listByBoss(widget.bossId)
-          .where((t) => !t.deleted && t.dateMs >= start && t.dateMs < end)
-          .toList()
-        ..sort((a, b) => a.seqNo.compareTo(b.seqNo));
+    allTx = txStore
+        .listByBoss(widget.bossId)
+        .where((t) => !t.deleted && t.dateMs >= start && t.dateMs < end)
+        .toList()
+      ..sort((a, b) => a.seqNo.compareTo(b.seqNo));
 
-      depositTx = allTx.where((t) => t.type == "deposit").toList();
-      withdrawTx = allTx.where((t) => t.type == "withdraw").toList();
+    depositTx = allTx.where((t) => t.type == "deposit").toList();
+    withdrawTx = allTx.where((t) => t.type == "withdraw").toList();
 
-      if (mounted) setState(() {});
-    }
+    if (mounted) setState(() {});
+  }
 
-    int get depositCount => depositTx.length;
-    int get withdrawCount => withdrawTx.length;
-    int get totalCount => depositCount + withdrawCount;
+  int get depositCount => depositTx.length;
+  int get withdrawCount => withdrawTx.length;
+  int get totalCount => depositCount + withdrawCount;
 
-    int get totalDeposit => depositTx.fold<int>(0, (s, t) => s + t.totalKs);
-    int get totalWithdraw => withdrawTx.fold<int>(0, (s, t) => s + t.totalKs);
+  int get totalDeposit => depositTx.fold<int>(0, (s, t) => s + t.totalKs);
+  int get totalWithdraw => withdrawTx.fold<int>(0, (s, t) => s + t.totalKs);
 
-    int get previousBalance {
-      final d = selectedDate;
-      final start = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
-      return _balanceBeforeDay(start);
-    }
+  int get previousBalance {
+    final d = selectedDate;
+    final start = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
+    return _balanceBeforeDay(start);
+  }
 
-    int get subTotal => previousBalance + totalDeposit;
-    int get closingBalance => subTotal - totalWithdraw;
+  int get subTotal => previousBalance + totalDeposit;
+  int get closingBalance => subTotal - totalWithdraw;
 
   Future<void> pickDate() async {
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: selectedDate,
-        firstDate: DateTime(2020),
-        lastDate: DateTime(2100),
-      );
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
 
-      if (picked != null) {
-        setState(() => selectedDate = picked);
-        _reloadForSelectedDay();
-      }
+    if (picked != null) {
+      setState(() => selectedDate = picked);
+      _reloadForSelectedDay();
     }
+  }
 
-Widget sectionTitle(String text, Color color) {
+  Widget sectionTitle(String text, Color color) {
     return Padding(
       padding: const EdgeInsets.only(top: 18, bottom: 8),
       child: Text(
@@ -247,69 +246,66 @@ Widget sectionTitle(String text, Color color) {
   }
 
   Future<void> _showTxActions(LedgerTx t) async {
+
     showModalBottomSheet(
+
       context: context,
+
       showDragHandle: true,
+
       builder: (_) {
+
         return SafeArea(
+
           child: Column(
+
             mainAxisSize: MainAxisSize.min,
+
             children: [
+
               ListTile(
-                leading: const Icon(Icons.edit),
-                title: const Text("Edit"),
-                onTap: () async {
-                  Navigator.pop(context);
+              leading: const Icon(Icons.edit),
+              title: const Text("Edit"),
+              onTap: () async {
+                Navigator.pop(context);
 
-                  await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => NewTransactionScreen(
-                          bossId: widget.bossId,
-                          existing: t,
-                        ),
-                      ),
-                    );
-
-                    _reloadForSelectedDay();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text("Delete"),
-                onTap: () async {
-                  Navigator.pop(context);
-
-                  final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text("Delete transaction?"),
-                      content: const Text("ဒီစာရင်းကိုဖျက်မလား?"),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text("Cancel"),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text("Delete"),
-                        ),
-                      ],
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NewTransactionScreen(
+                      bossId: widget.bossId,
+                      existing: t,
                     ),
-                  );
+                  ),
+                );
 
-                  if (ok == true) {
-                      await txStore.softDelete(t.id);
-                      _reloadForSelectedDay();
-                    }
-                },
-              ),
+                if (mounted) setState(() {});
+              },
+            ),
+
+              ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text("Delete"),
+              onTap: () async {
+                Navigator.pop(context);
+                await txStore.softDelete(t.id);
+                if (mounted) setState(() {});
+              },
+            ),
+
               const SizedBox(height: 8),
+
             ],
+
           ),
+
         );
+
       },
+
     );
+
   }
+
 
   Widget summaryRow(String label, int value, {bool bold = false}) {
     return Padding(

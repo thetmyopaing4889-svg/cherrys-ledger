@@ -131,28 +131,44 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
     }
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    final id = widget.existing?.id ?? "t_$now";
-    final tx = LedgerTx(
-      id: id,
-      bossId: widget.bossId,
-      dateMs: _date.millisecondsSinceEpoch,
-      seqNo: _seqNo,
-      description: desc,
-      personName: name,
-      type: _type,
-      amountKs: _amountKs,
-      commissionKs: _commissionKs,
-      totalKs: _totalKs,
-      deleted: false,
-    );
 
-    if (widget.existing != null) {
+    final base = widget.existing;
+
+    final tx = (base != null)
+        ? base.copyWith(
+            // keep id + seqNo same on edit
+            bossId: widget.bossId,
+            dateMs: _date.millisecondsSinceEpoch,
+            description: desc,
+            personName: name,
+            type: _type,
+            amountKs: _amountKs,
+            commissionKs: _commissionKs,
+            totalKs: _totalKs,
+            deleted: false,
+          )
+        : LedgerTx(
+            id: "t_$now",
+            bossId: widget.bossId,
+            dateMs: _date.millisecondsSinceEpoch,
+            seqNo: _seqNo,
+            description: desc,
+            personName: name,
+            type: _type,
+            amountKs: _amountKs,
+            commissionKs: _commissionKs,
+            totalKs: _totalKs,
+            deleted: false,
+          );
+
+    if (base != null) {
       await txStore.updateTx(tx);
     } else {
       await txStore.addTx(tx);
     }
+  
     if (mounted) Navigator.pop(context);
-  }
+    }
 
   @override
   Widget build(BuildContext context) {
