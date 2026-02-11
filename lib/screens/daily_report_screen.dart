@@ -32,10 +32,23 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
   @override
   void initState() {
     super.initState();
+
     txStore.load().then((_) {
       bossStore.load().then((_) {
         _reloadForSelectedDay();
       });
+    });
+
+    txStore.addListener(_onStore);
+  }
+
+  void _onStore() {
+    if (!mounted) return;
+    if (!txStore.isLoaded) return;
+    _reloadForSelectedDay();
+  }
+
+);
     });
   }
 
@@ -96,6 +109,12 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
 
   int get subTotal => previousBalance + totalDeposit;
   int get closingBalance => subTotal - totalWithdraw;
+
+  
+  void dispose() {
+    txStore.removeListener(_onStore);
+    super.dispose();
+  }
 
   Future<void> pickDate() async {
     final picked = await showDatePicker(
@@ -246,66 +265,71 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
   }
 
   Future<void> _showTxActions(LedgerTx t) async {
-
-    showModalBottomSheet(
-
+    await showModalBottomSheet(
       context: context,
-
       showDragHandle: true,
-
       builder: (_) {
-
         return SafeArea(
-
           child: Column(
-
             mainAxisSize: MainAxisSize.min,
-
             children: [
-
               ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text("Edit"),
-              onTap: () async {
-                Navigator.pop(context);
+                leading: const Icon(Icons.edit),
+                title: const Text("Edit"),
+                onTap: () async {
+                  Navigator.pop(context);
 
-                await Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => NewTransactionScreen(
-                      bossId: widget.bossId,
-                      existing: t,
+                  final changed = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => NewTransactionScreen(
+                        bossId: widget.bossId,
+                        existing: t,
+                      ),
                     ),
-                  ),
-                );
+                  );
 
-                if (mounted) setState(() {});
-              },
-            ),
-
+                  if (changed == true) {
+                    _reloadForSelectedDay();
+                  }
+                },
+              ),
               ListTile(
-              leading: const Icon(Icons.delete, color: Colors.red),
-              title: const Text("Delete"),
-              onTap: () async {
-                Navigator.pop(context);
-                await txStore.softDelete(t.id);
-                if (mounted) setState(() {});
-              },
-            ),
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text("Delete"),
+                onTap: () async {
+                  Navigator.pop(context);
 
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text("Delete transaction?"),
+                      content: const Text("ဒီစာရင်းကိုဖျက်မလား?"),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text("Cancel"),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text("Delete"),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (ok == true) {
+                    await txStore.softDelete(t.id);
+                    _reloadForSelectedDay();
+                  }
+                },
+              ),
               const SizedBox(height: 8),
-
             ],
-
           ),
-
         );
-
       },
-
     );
-
   }
-
 
   Widget summaryRow(String label, int value, {bool bold = false}) {
     return Padding(
