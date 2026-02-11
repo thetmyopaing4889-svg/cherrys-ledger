@@ -48,9 +48,6 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     _reloadForSelectedDay();
   }
 
-);
-    });
-  }
 
   int _bossOpeningBalance() {
     final b = bossStore.getById(widget.bossId);
@@ -109,13 +106,11 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
 
   int get subTotal => previousBalance + totalDeposit;
   int get closingBalance => subTotal - totalWithdraw;
-
-  
+  @override
   void dispose() {
     txStore.removeListener(_onStore);
     super.dispose();
   }
-
   Future<void> pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -141,9 +136,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
           color: color,
         ),
       ),
-    );
-  }
-
+                    );
+                    }
   Widget _totalRow(int amountSum, int commSum, int totalSum) {
     const bold = TextStyle(fontSize: 12, fontWeight: FontWeight.w900);
     return Padding(
@@ -176,9 +170,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
           ],
         ),
       ),
-    );
-  }
-
+                    );
+                    }
   Widget _table(List<LedgerTx> list) {
     if (list.isEmpty) {
       return Container(
@@ -195,15 +188,13 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
           ],
         ),
         child: const Text("No transactions"),
-      );
-    }
-
+                    );
+                    }
     final headerStyle = TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.w900,
       color: Colors.black.withOpacity(0.65),
-    );
-    const cellStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
+                    );    const cellStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w700);
 
     final amountSum = list.fold<int>(0, (s, t) => s + t.amountKs);
     final commSum = list.fold<int>(0, (s, t) => s + t.commissionKs);
@@ -254,32 +245,33 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                       ),
                     ),
                   ],
-                );
-              }).toList(),
+                    );
+                    }).toList(),
             ),
           ),
           _totalRow(amountSum, commSum, totalSum),
         ],
       ),
-    );
-  }
-
+                    );
+                    }
   Future<void> _showTxActions(LedgerTx t) async {
+    final rootCtx = context;
+
     await showModalBottomSheet(
-      context: context,
+      context: rootCtx,
       showDragHandle: true,
-      builder: (_) {
+      builder: (sheetCtx) {
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
                 leading: const Icon(Icons.edit),
-                title: const Text("Edit"),
+                title: const Text('Edit'),
                 onTap: () async {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetCtx);
 
-                  final changed = await Navigator.of(context).push<bool>(
+                  final changed = await Navigator.of(rootCtx).push<bool>(
                     MaterialPageRoute(
                       builder: (_) => NewTransactionScreen(
                         bossId: widget.bossId,
@@ -295,23 +287,26 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
-                title: const Text("Delete"),
+                title: const Text('Delete'),
                 onTap: () async {
-                  Navigator.pop(context);
+                  Navigator.pop(sheetCtx);
+
+                  // let the bottom sheet close before opening dialog
+                  await Future.delayed(const Duration(milliseconds: 80));
 
                   final ok = await showDialog<bool>(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: const Text("Delete transaction?"),
-                      content: const Text("ဒီစာရင်းကိုဖျက်မလား?"),
+                    context: rootCtx,
+                    builder: (dialogCtx) => AlertDialog(
+                      title: const Text('Delete transaction?'),
+                      content: const Text('ဒီစာရင်းကိုဖျက်မလား?'),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text("Cancel"),
+                          onPressed: () => Navigator.pop(dialogCtx, false),
+                          child: const Text('Cancel'),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text("Delete"),
+                          onPressed: () => Navigator.pop(dialogCtx, true),
+                          child: const Text('Delete'),
                         ),
                       ],
                     ),
@@ -349,24 +344,23 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     );
   }
 
-    Widget countRow(String label, int value, {bool bold = false}) {
-      final txt = " စောင်";
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(child: Text(label)),
-            Text(
-              txt,
-              style: TextStyle(
-                fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
-              ),
+  Widget countRow(String label, int value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(child: Text(label)),
+          Text(
+            "$value စောင်",
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w900 : FontWeight.w700,
             ),
-          ],
-        ),
-      );
-    }
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _card(Widget child) {
     return Container(
@@ -388,6 +382,7 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF6F8),
       appBar: AppBar(
@@ -494,8 +489,8 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
           ],
         ),
       ),
-    );
-  }
+                    );
+                    }
 }
 
 Widget _countRow(String label, int value, {bool bold = false}) {
@@ -513,5 +508,5 @@ Widget _countRow(String label, int value, {bool bold = false}) {
         ),
       ],
     ),
-  );
-}
+                    );
+                    }

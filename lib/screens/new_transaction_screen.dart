@@ -167,9 +167,8 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
       await txStore.addTx(tx);
     }
   
-    if (mounted) Navigator.pop(context);
-    }
-
+    if (mounted) Navigator.pop(context, true);
+  }
   @override
   Widget build(BuildContext context) {
     final typeColor = _type == "deposit" ? _deposit : _withdraw;

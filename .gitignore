@@ -48,3 +48,13 @@ app.*.map.json
 _backup_*/
 *.BAK_*
 lib/screens/daily_report_export_screen.dart.BAK_*
+
+# local backup files (auto generated)
+lib/screens/*.bak_*
+lib/screens/*.fixbak_*
+lib/screens/*.cleanbak_*
+lib/screens/*.oneshotbak_*
+lib/screens/*.bak_fix_*
+lib/screens/*.bak_before_*
+lib/screens/*.bak_showTxActions
+lib/screens/*.fix2_*
