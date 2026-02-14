@@ -227,9 +227,41 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
         surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
-            tooltip: "Scan",
-            icon: const Icon(Icons.qr_code_scanner),
-          ),
+              tooltip: "Scan",
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: () async {
+                final scannedText = await Navigator.of(context).push<String?>(
+                  MaterialPageRoute(builder: (_) => const ScanScreen()),
+                );
+                if (!context.mounted) return;
+
+                final t = (scannedText ?? "").trim();
+                if (t.isEmpty) return;
+
+                final parsed = OcrParser.parse(t);
+
+                // OcrParser returns OcrParsed (object fields)
+                final name = (parsed.name).trim();
+                final method = (parsed.method).trim();
+                final phone = (parsed.phone).trim();
+                final amount = parsed.amount;
+
+                setState(() {
+                  _type = "withdraw"; // force withdraw only
+
+                  if (name.isNotEmpty) _name.text = name;
+
+                  final parts = <String>[];
+                  if (method.isNotEmpty) parts.add(method);
+                  if (phone.isNotEmpty) parts.add(phone);
+                  if (parts.isNotEmpty) _desc.text = parts.join(" ");
+
+                  if (amount > 0) _amount.text = amount.toString();
+
+                  // commission manual: do nothing
+                });
+              },
+            ),
         ],
       ),
 
