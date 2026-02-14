@@ -241,6 +241,40 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
               final parsed = OcrParser.parse(t);
 
               setState(() {
+                _type = "withdraw";
+
+                final name = parsed.name.trim();
+                final phone = parsed.phone.trim();
+                final method = parsed.method.trim();
+                final amount = parsed.amount;
+
+                if (name.isNotEmpty) {
+                  _name.text = name;
+                  final parts = <String>[];
+                  if (method.isNotEmpty) parts.add(method);
+                  if (phone.isNotEmpty) parts.add(phone);
+                  _desc.text = parts.join(" ");
+                } else {
+                  if (phone.isNotEmpty) _name.text = phone;
+                  _desc.text = method;
+                }
+
+                if (amount > 0) _amount.text = amount.toString();
+              });
+            },
+          ),
+// removed stray onPressed
+              final scannedText = await Navigator.of(context).push<String?>(
+                MaterialPageRoute(builder: (_) => const ScanScreen()),
+              );
+              if (!context.mounted) return;
+
+              final t = (scannedText ?? "").trim();
+              if (t.isEmpty) return;
+
+              final parsed = OcrParser.parse(t);
+
+              setState(() {
                 // force withdraw only
                 _type = "withdraw";
 
@@ -266,39 +300,6 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
               });
             },
           ),
-              onPressed: () async {
-                final scannedText = await Navigator.of(context).push<String?>(
-                  MaterialPageRoute(builder: (_) => const ScanScreen()),
-                );
-                if (!context.mounted) return;
-
-                final t = (scannedText ?? "").trim();
-                if (t.isEmpty) return;
-
-                final parsed = OcrParser.parse(t);
-
-                // OcrParser returns OcrParsed (object fields)
-                final name = (parsed.name).trim();
-                final method = (parsed.method).trim();
-                final phone = (parsed.phone).trim();
-                final amount = parsed.amount;
-
-                setState(() {
-                  _type = "withdraw"; // force withdraw only
-
-                  if (name.isNotEmpty) _name.text = name;
-
-                  final parts = <String>[];
-                  if (method.isNotEmpty) parts.add(method);
-                  if (phone.isNotEmpty) parts.add(phone);
-                  if (parts.isNotEmpty) _desc.text = parts.join(" ");
-
-                  if (amount > 0) _amount.text = amount.toString();
-
-                  // commission manual: do nothing
-                });
-              },
-            ),
         ],
       ),
 
