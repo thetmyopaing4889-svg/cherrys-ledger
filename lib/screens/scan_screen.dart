@@ -1,6 +1,4 @@
-import 'dart:async';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -15,20 +13,22 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> {
   CameraController? _cam;
-  late final TextRecognizer _ocr;
-
+  bool _ready = false;
   bool _busy = false;
-  String _lastText = "";
-  bool _streaming = false;
+  bool _torch = false;
+
+  String _text = "";
+
+  late final TextRecognizer _ocr;
 
   @override
   void initState() {
     super.initState();
     _ocr = TextRecognizer(script: TextRecognitionScript.latin);
-    _initCam();
+    _init();
   }
 
-  Future<void> _initCam() async {
+  Future<void> _init() async {
     try {
       final cams = await availableCameras();
       final back = cams.firstWhere(
@@ -38,128 +38,155 @@ class _ScanScreenState extends State<ScanScreen> {
 
       final ctrl = CameraController(
         back,
-        ResolutionPreset.medium,
+        ResolutionPreset.high,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
 
       await ctrl.initialize();
+      await ctrl.setFocusMode(FocusMode.auto);
+      await ctrl.setExposureMode(ExposureMode.auto);
+
       if (!mounted) return;
-
-      setState(() => _cam = ctrl);
-
-      // start stream
-      await _cam!.startImageStream(_onFrame);
-      _streaming = true;
+      setState(() {
+        _cam = ctrl;
+        _ready = true;
+      });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Camera init failed: $e")),
-      );
+      setState(() {
+        _ready = false;
+        _text = "Camera init error: $e";
+      });
     }
   }
 
-  InputImageRotation _rotationFromDeg(int deg) {
-    switch (deg) {
-      case 90:
-        return InputImageRotation.rotation90deg;
-      case 180:
-        return InputImageRotation.rotation180deg;
-      case 270:
-        return InputImageRotation.rotation270deg;
-      default:
-        return InputImageRotation.rotation0deg;
-    }
-  }
-
-  Future<void> _onFrame(CameraImage img) async {
-    if (_busy || !mounted) return;
-    _busy = true;
-
+  Future<void> _toggleTorch() async {
+    final c = _cam;
+    if (c == null) return;
     try {
-      final cam = _cam;
-      if (cam == null) return;
+      _torch = !_torch;
+      await c.setFlashMode(_torch ? FlashMode.torch : FlashMode.off);
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
 
-      // bytes
-      final bytes = Uint8List.fromList(img.planes.expand((p) => p.bytes).toList());
-// meta
-      final ui.Size size = ui.Size(img.width.toDouble(), img.height.toDouble());
+  Future<void> _scanOnce() async {
+    final c = _cam;
+    if (c == null || _busy) return;
 
-      final rotation = _rotationFromDeg(cam.description.sensorOrientation);
+    setState(() => _busy = true);
+    try {
+      // capture
+      final file = await c.takePicture();
 
-      final format =
-          InputImageFormatValue.fromRawValue(img.format.raw) ??
-              InputImageFormat.yuv420;
+      // OCR
+      final img = InputImage.fromFilePath(file.path);
+      final res = await _ocr.processImage(img);
 
-      final meta = InputImageMetadata(
-        size: size,
-        rotation: rotation,
-        format: format,
-        bytesPerRow: img.planes.first.bytesPerRow,
-      );
-
-      final input = InputImage.fromBytes(bytes: bytes, metadata: meta);
-
-      final result = await _ocr.processImage(input);
-      final text = result.text.trim();
-
-      if (text.isNotEmpty && mounted) {
-        setState(() => _lastText = text);
+      final out = (res.text).trim();
+      if (mounted) {
+        setState(() {
+          _text = out;
+        });
       }
-    } catch (_) {
-      // ignore frame errors (keep stream alive)
+
+      // cleanup temp file
+      try {
+        final f = File(file.path);
+        if (await f.exists()) await f.delete();
+      } catch (_) {}
+    } catch (e) {
+      if (mounted) setState(() => _text = "Scan error: $e");
     } finally {
-      _busy = false;
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
   void dispose() {
-    () async {
-      try {
-        if (_streaming) {
-          await _cam?.stopImageStream();
-        }
-      } catch (_) {}
-      await _cam?.dispose();
-      await _ocr.close();
-    }();
+    _ocr.close();
+    _cam?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final cam = _cam;
-
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text("Live Scan"),
+        backgroundColor: const Color(0xFFFFF3F7),
+        surfaceTintColor: Colors.transparent,
         actions: [
           IconButton(
-            tooltip: "Use",
+            tooltip: "Done",
             icon: const Icon(Icons.check),
-            onPressed: () {
-              Navigator.pop(context, _lastText);
-            },
+            onPressed: _text.trim().isEmpty ? null : () => Navigator.pop(context, _text),
           ),
         ],
       ),
-      body: cam == null || !cam.value.isInitialized
-          ? const Center(child: CircularProgressIndicator())
+      body: !_ready
+          ? Center(
+              child: Text(
+                _text.isNotEmpty ? _text : "Opening camera...",
+                style: const TextStyle(color: Colors.white),
+              ),
+            )
           : Stack(
               children: [
-                CameraPreview(cam),
+                Positioned.fill(child: CameraPreview(_cam!)),
+
+                // bottom panel
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    color: Colors.black.withOpacity(0.55),
-                    child: Text(
-                      _lastText.isEmpty ? "Scanning..." : _lastText,
-                      style: const TextStyle(color: Colors.white),
-                      maxLines: 6,
-                      overflow: TextOverflow.ellipsis,
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
+                    decoration: const BoxDecoration(
+                      color: Color(0xCC000000),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: _busy ? null : _scanOnce,
+                                icon: _busy
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                      )
+                                    : const Icon(Icons.document_scanner),
+                                label: Text(_busy ? "Scanning..." : "Scan"),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            IconButton(
+                              tooltip: "Torch",
+                              onPressed: _toggleTorch,
+                              icon: Icon(_torch ? Icons.flash_on : Icons.flash_off, color: Colors.white),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withOpacity(0.15)),
+                          ),
+                          child: Text(
+                            _text.isEmpty ? "Tap Scan to read text..." : _text,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
