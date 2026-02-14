@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'scan_screen.dart';
+import 'scan_sheet.dart';
 import '../utils/ocr_parser.dart';
 import '../main.dart';
 import '../models/ledger_tx.dart';
@@ -230,8 +230,11 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
             tooltip: "Scan",
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: () async {
-              final scannedText = await Navigator.of(context).push<String?>(
-                MaterialPageRoute(builder: (_) => const ScanScreen()),
+              final scannedText = await showModalBottomSheet<String?>(
+                context: context,
+                isScrollControlled: true,
+                showDragHandle: true,
+                builder: (_) => const ScanSheet(),
               );
               if (!context.mounted) return;
 
