@@ -1,110 +1,134 @@
 class OcrParsed {
   final String phone;
+  final String method; // "Kpay" | "WavePay" | "WavePass" | ""
   final String name;
-  final String method; // KPay / WavePay / WavePass / (unknown)
   final int amount;
 
   const OcrParsed({
     required this.phone,
-    required this.name,
     required this.method,
+    required this.name,
     required this.amount,
   });
 }
 
 class OcrParser {
   static OcrParsed parse(String raw) {
-    var text = raw.trim();
+    // 0) Pre-normalize
+    var s = raw.toLowerCase();
 
-    // normalize spaces + lowercase for keyword checks
-    final lower = text.toLowerCase();
+    // unify whitespace/newlines
+    s = s.replaceAll('\r', '\n');
+    s = s.replaceAll(RegExp(r'[ \t]+'), ' ');
+    s = s.replaceAll(RegExp(r'\n{2,}'), '\n').trim();
 
-    // method detection rules (your requirements)
-    // - "wave with password" / "wave pass" / "pw" / "pass" => WavePass
-    // - "wave" without pass => WavePay
-    // - "kp" or "kpay" => KPay
-    String method = "";
-    final hasWave = lower.contains("wave");
-    final hasKp = lower.contains(" kp") || lower.startsWith("kp ") || lower.contains("kpay") || lower.contains("kbzpay");
+    // normalize kpay variants
+    s = s.replaceAll(RegExp(r'\b(kbz\s*pay|kbzpay|k\s*pay|kpay|kp)\b'), 'kpay');
 
-    final hasPass = lower.contains("wave with password") ||
-        lower.contains("wavepass") ||
-        lower.contains("wave pass") ||
-        lower.contains("password") ||
-        lower.contains(" pw") ||
-        lower.contains("pass");
+    // normalize wave pass variants -> wavepass
+    s = s.replaceAll(
+      RegExp(r'\b(wave\s*(with\s*)?(pw|pass|password|passcode)|wave\s*(pw|pass|password|passcode))\b'),
+      'wavepass',
+    );
 
-    if (hasWave && hasPass) {
-      method = "WavePass";
-    } else if (hasWave) {
-      method = "WavePay";
-    } else if (hasKp) {
-      method = "KPay";
+    // normalize wave account variants to wave (method group)
+    s = s.replaceAll(RegExp(r'\b(wave\s*acc|wave\s*account|wave\s*a\/c)\b'), 'wave');
+
+    // 1) Phone extract (first match)
+    final phoneMatch = RegExp(r'09\d{7,9}').firstMatch(s);
+    final phone = phoneMatch?.group(0) ?? '';
+
+    // 2) Method extract (keyword-based)
+    String method = '';
+    if (s.contains('wavepass') || RegExp(r'\bwave\b.*\b(pw|pass|password|passcode)\b').hasMatch(s)) {
+      method = 'WavePass';
+    } else if (s.contains('wave')) {
+      method = 'WavePay';
+    } else if (s.contains('kpay')) {
+      method = 'Kpay';
     }
 
-    // phone: Myanmar 09xxxxxxxxx (7~9 digits after 09)
-    final phoneRegex = RegExp(r'\b09\d{7,9}\b');
-    final phoneMatch = phoneRegex.firstMatch(text);
-    final phone = phoneMatch?.group(0) ?? "";
+    // 3) Amount extract
+    int amount = _extractAmount(s, phone);
 
-    // amount: pick the largest numeric chunk (handles commas)
-    // examples: 30,000 / 30000 / 500000
-    final numRegex = RegExp(r'\b\d[\d,]*\b');
-    final nums = numRegex
-        .allMatches(text)
-        .map((m) => m.group(0) ?? "")
-        .map((s) => s.replaceAll(",", ""))
-        .where((s) => s.isNotEmpty)
-        .toList();
+    // 4) Name extract (tolerant)
+    final name = _extractName(s, phone, method, amount);
 
-    int amount = 0;
-    if (nums.isNotEmpty) {
-      // choose the biggest integer value (safer than "first")
-      for (final n in nums) {
-        final v = int.tryParse(n) ?? 0;
-        if (v > amount) amount = v;
-      }
+    return OcrParsed(phone: phone, method: method, name: name, amount: amount);
+  }
+
+  static int _extractAmount(String s, String phone) {
+    // Rule A: unit words (Myanmar + English shorthand)
+    // 30 သိန်း / 30l / 30L / 30 lakh
+    final lakh = RegExp(r'(\d+(?:[.,]\d+)?)\s*(သိန်း|l|lakh)\b');
+    final thousand10 = RegExp(r'(\d+(?:[.,]\d+)?)\s*(သောင်း)\b');
+
+    final m1 = lakh.firstMatch(s);
+    if (m1 != null) {
+      final n = _toInt(m1.group(1));
+      if (n > 0) return n * 100000;
     }
 
-    // name: remove phone + amounts + obvious keywords
-    var name = text;
-    if (phone.isNotEmpty) name = name.replaceAll(phone, " ");
-    for (final n in nums) {
-      name = name.replaceAll(n, " ");
-      name = name.replaceAll(_withCommas(n), " ");
+    final m2 = thousand10.firstMatch(s);
+    if (m2 != null) {
+      final n = _toInt(m2.group(1));
+      if (n > 0) return n * 10000;
+    }
+
+    // Rule B: largest number wins (exclude phone)
+    var t = s;
+    if (phone.isNotEmpty) t = t.replaceAll(phone, ' ');
+    t = t.replaceAll(RegExp(r'09\d{7,9}'), ' ');
+
+    // keep only numeric tokens
+    final nums = RegExp(r'\b\d{3,}\b').allMatches(t).map((m) => int.tryParse(m.group(0)!) ?? 0).toList();
+    if (nums.isEmpty) {
+      // fallback even for small numbers like 30 (if no unit)
+      final smalls = RegExp(r'\b\d+\b').allMatches(t).map((m) => int.tryParse(m.group(0)!) ?? 0).toList();
+      if (smalls.isEmpty) return 0;
+      smalls.sort();
+      return smalls.last;
+    }
+    nums.sort();
+    return nums.last;
+  }
+
+  static String _extractName(String s, String phone, String method, int amount) {
+    // remove obvious tokens then pick meaningful line
+    var t = s;
+
+    if (phone.isNotEmpty) t = t.replaceAll(phone, ' ');
+    if (amount > 0) {
+      t = t.replaceAll(amount.toString(), ' ');
+      // also remove unit forms if present
+      t = t.replaceAll(RegExp(r'\b\d+(?:[.,]\d+)?\s*(သိန်း|သောင်း|l|lakh)\b'), ' ');
     }
 
     // remove method keywords
-    name = name
-        .replaceAll(RegExp(r'\bkp\b', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\bkpay\b', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\bkbzpay\b', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\bwave\b', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\bpassword\b', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\bpw\b', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\bpass\b', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\bwith\b', caseSensitive: false), " ");
+    t = t.replaceAll('kpay', ' ');
+    t = t.replaceAll('wavepass', ' ');
+    t = t.replaceAll(RegExp(r'\bwave\b'), ' ');
 
-    // remove common burmese fragments that appear in messages
-    name = name
-        .replaceAll(RegExp(r'သင့်ငွေ|ငွေ|ပို့|ရရှိ|လွှဲ|withdraw|wd', caseSensitive: false), " ")
-        .replaceAll(RegExp(r'\s+'), " ")
-        .trim();
+    // remove extra punctuation
+    t = t.replaceAll(RegExp(r'[,:;|•·\-_=]+'), ' ');
+    t = t.replaceAll(RegExp(r'[ ]+'), ' ');
+    t = t.replaceAll(RegExp(r'\n[ ]+'), '\n').trim();
 
-    return OcrParsed(phone: phone, name: name, method: method, amount: amount);
+    // choose best line: first non-empty line with letters/myanmar chars
+    final lines = t.split('\n').map((x) => x.trim()).where((x) => x.isNotEmpty).toList();
+    for (final line in lines) {
+      // avoid pure numbers
+      if (RegExp(r'^\d+$').hasMatch(line)) continue;
+      return line;
+    }
+
+    // fallback: empty
+    return '';
   }
 
-  static String _withCommas(String n) {
-    // convert "30000" -> "30,000" style for replacement attempts
-    final v = int.tryParse(n);
-    if (v == null) return n;
-    final s = v.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < s.length; i++) {
-      final idxFromEnd = s.length - i;
-      buf.write(s[i]);
-      if (idxFromEnd > 1 && idxFromEnd % 3 == 1) buf.write(',');
-    }
-    return buf.toString();
+  static int _toInt(String? s) {
+    if (s == null) return 0;
+    final cleaned = s.replaceAll(',', '').replaceAll('.', '').trim();
+    return int.tryParse(cleaned) ?? 0;
   }
 }
