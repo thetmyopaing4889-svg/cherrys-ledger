@@ -81,13 +81,8 @@ class _ScanScreenState extends State<ScanScreen> {
       if (cam == null) return;
 
       // bytes
-      final WriteBuffer allBytes = WriteBuffer();
-      for (final p in img.planes) {
-        allBytes.putUint8List(p.bytes);
-      }
-      final bytes = allBytes.done().buffer.asUint8List();
-
-      // meta
+      final bytes = Uint8List.fromList(img.planes.expand((p) => p.bytes).toList());
+// meta
       final ui.Size size = ui.Size(img.width.toDouble(), img.height.toDouble());
 
       final rotation = _rotationFromDeg(cam.description.sensorOrientation);
