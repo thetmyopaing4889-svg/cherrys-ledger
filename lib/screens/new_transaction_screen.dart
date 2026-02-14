@@ -75,11 +75,11 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
       if (st.isNotEmpty) {
         final parsed = OcrParser.parse(st); // Map<String, dynamic>
 
-        final name = (parsed["name"] ?? "").toString().trim();
-        final method = (parsed["method"] ?? "").toString().trim();
-        final phone = (parsed["phone"] ?? "").toString().trim();
+        final name = (parsed.name?? "").toString().trim();
+        final method = (parsed.method?? "").toString().trim();
+        final phone = (parsed.phone?? "").toString().trim();
 
-        final amountRaw = (parsed["amount"] ?? 0).toString();
+        final amountRaw = (parsed.amount ?? 0).toString();
         final amount = int.tryParse(amountRaw) ?? 0;
 
         // force withdraw only
@@ -220,36 +220,19 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
       appBar: AppBar(
         title: Text(
           widget.existing != null ? "Edit Transaction" : "New Transaction",
-          style: TextStyle(fontWeight: FontWeight.w900),
+          style: const TextStyle(fontWeight: FontWeight.w900),
         ),
         centerTitle: true,
         backgroundColor: const Color(0xFFFFF3F7),
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            tooltip: "Scan",
+            icon: const Icon(Icons.qr_code_scanner),
+          ),
+        ],
       ),
-              onPressed: () async {
-                final scannedText = await Navigator.of(context).push<String?>(
-                  MaterialPageRoute(builder: (_) => const ScanScreen()),
-                );
-                if (!mounted) return;
-                final t = (scannedText ?? "").trim();
-                if (t.isEmpty) return;
 
-                final parsed = OcrParser.parse(t);
-                setState(() {
-                  _type = "withdraw";
-                  if ((parsed["name"] ?? "").toString().trim().isNotEmpty) _name.text = (parsed["name"] ?? "").toString().trim();
-
-                  final descParts = <String>[];
-                  if ((parsed["method"] ?? "").toString().trim().isNotEmpty) descParts.add((parsed["method"] ?? "").toString().trim());
-                  if ((parsed["phone"] ?? "").toString().trim().isNotEmpty) descParts.add((parsed["phone"] ?? "").toString().trim());
-                  if (descParts.isNotEmpty) _desc.text = descParts.join(" ");
-
-                  if ((int.tryParse((parsed["amount"] ?? 0).toString()) ?? 0) > 0) _amount.text = (int.tryParse((parsed["amount"] ?? 0).toString()) ?? 0).toString();
-                });
-              },
-            ),
-          ],
-        ),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Container(
