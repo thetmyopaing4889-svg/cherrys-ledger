@@ -9,11 +9,14 @@ class NewTransactionScreen extends StatefulWidget {
   final LedgerTx? existing;
   final String? scanText;
 
-  final String bossId;
-  final LedgerTx? existing;
+  const NewTransactionScreen({
+    super.key,
+    required this.bossId,
+    this.existing,
+    this.scanText,
+  });
 
-  const NewTransactionScreen({super.key, required this.bossId, this.existing});
-@override
+  @override
   State<NewTransactionScreen> createState() => _NewTransactionScreenState();
 }
 
@@ -200,11 +203,7 @@ txStore.load();
         centerTitle: true,
         backgroundColor: const Color(0xFFFFF3F7),
         surfaceTintColor: Colors.transparent,
-      )..copyWith(
-          actions: [
-            IconButton(
-              tooltip: "Scan",
-              icon: const Icon(Icons.qr_code_scanner),
+      ),
               onPressed: () async {
                 final scannedText = await Navigator.of(context).push<String?>(
                   MaterialPageRoute(builder: (_) => const ScanScreen()),
