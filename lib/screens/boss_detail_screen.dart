@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/ocr_parser.dart';
+import 'scan_screen.dart';
 import 'reports_menu_screen.dart';
 import '../main.dart';
 import '../models/boss.dart';

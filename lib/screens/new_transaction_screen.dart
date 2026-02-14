@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'scan_screen.dart';
+import '../utils/ocr_parser.dart';
 import '../main.dart';
 import '../models/ledger_tx.dart';
 
 class NewTransactionScreen extends StatefulWidget {
+  final String bossId;
+  final LedgerTx? existing;
+  final String? scanText;
+
   final String bossId;
   final LedgerTx? existing;
 
@@ -39,7 +45,19 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
   @override
   void initState() {
     super.initState();
-    txStore.load();
+
+    // Auto-fill from Scan (withdraw only)
+    if (widget.existing == null && (widget.scanText ?? '').trim().isNotEmpty) {
+      final parsed = OcrParser.parse(widget.scanText!.trim());
+      _type = 'withdraw';
+      if (parsed.name.isNotEmpty) _name.text = parsed.name;
+      final descParts = <String>[];
+      if (parsed.method.isNotEmpty) descParts.add(parsed.method);
+      if (parsed.phone.isNotEmpty) descParts.add(parsed.phone);
+      if (descParts.isNotEmpty) _desc.text = descParts.join(' ');
+      if (parsed.amount > 0) _amount.text = parsed.amount.toString();
+    }
+txStore.load();
 
     final ex = widget.existing;
     if (ex != null) {
@@ -182,7 +200,35 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
         centerTitle: true,
         backgroundColor: const Color(0xFFFFF3F7),
         surfaceTintColor: Colors.transparent,
-      ),
+      )..copyWith(
+          actions: [
+            IconButton(
+              tooltip: "Scan",
+              icon: const Icon(Icons.qr_code_scanner),
+              onPressed: () async {
+                final scannedText = await Navigator.of(context).push<String?>(
+                  MaterialPageRoute(builder: (_) => const ScanScreen()),
+                );
+                if (!mounted) return;
+                final t = (scannedText ?? "").trim();
+                if (t.isEmpty) return;
+
+                final parsed = OcrParser.parse(t);
+                setState(() {
+                  _type = "withdraw";
+                  if (parsed.name.isNotEmpty) _name.text = parsed.name;
+
+                  final descParts = <String>[];
+                  if (parsed.method.isNotEmpty) descParts.add(parsed.method);
+                  if (parsed.phone.isNotEmpty) descParts.add(parsed.phone);
+                  if (descParts.isNotEmpty) _desc.text = descParts.join(" ");
+
+                  if (parsed.amount > 0) _amount.text = parsed.amount.toString();
+                });
+              },
+            ),
+          ],
+        ),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Container(
