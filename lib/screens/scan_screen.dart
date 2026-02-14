@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
@@ -13,155 +16,155 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen> {
   CameraController? _cam;
   late final TextRecognizer _ocr;
-  bool _busy = false;
-  bool _ready = false;
 
-  // Throttle OCR so it stays fast + stable
-  DateTime _lastRun = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _busy = false;
+  String _lastText = "";
+  bool _streaming = false;
 
   @override
   void initState() {
     super.initState();
     _ocr = TextRecognizer(script: TextRecognitionScript.latin);
-    _init();
+    _initCam();
   }
 
-  Future<void> _init() async {
+  Future<void> _initCam() async {
     try {
       final cams = await availableCameras();
-      if (cams.isEmpty) {
-        if (mounted) Navigator.pop(context, null);
-        return;
-      }
-
-      final cam = cams.firstWhere(
+      final back = cams.firstWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cams.first,
       );
 
       final ctrl = CameraController(
-        cam,
+        back,
         ResolutionPreset.medium,
         enableAudio: false,
         imageFormatGroup: ImageFormatGroup.yuv420,
       );
 
       await ctrl.initialize();
-      await ctrl.startImageStream(_onFrame);
-
       if (!mounted) return;
-      setState(() {
-        _cam = ctrl;
-        _ready = true;
-      });
-    } catch (_) {
-      if (mounted) Navigator.pop(context, null);
+
+      setState(() => _cam = ctrl);
+
+      // start stream
+      await _cam!.startImageStream(_onFrame);
+      _streaming = true;
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Camera init failed: $e")),
+      );
+    }
+  }
+
+  InputImageRotation _rotationFromDeg(int deg) {
+    switch (deg) {
+      case 90:
+        return InputImageRotation.rotation90deg;
+      case 180:
+        return InputImageRotation.rotation180deg;
+      case 270:
+        return InputImageRotation.rotation270deg;
+      default:
+        return InputImageRotation.rotation0deg;
     }
   }
 
   Future<void> _onFrame(CameraImage img) async {
-    if (_busy) return;
-
-    final now = DateTime.now();
-    if (now.difference(_lastRun).inMilliseconds < 650) return; // throttle
-    _lastRun = now;
-
+    if (_busy || !mounted) return;
     _busy = true;
+
     try {
-      final ctrl = _cam;
-      if (ctrl == null) return;
+      final cam = _cam;
+      if (cam == null) return;
 
-      final input = _toInputImage(img, ctrl.description.sensorOrientation);
-      final res = await _ocr.processImage(input);
+      // bytes
+      final WriteBuffer allBytes = WriteBuffer();
+      for (final p in img.planes) {
+        allBytes.putUint8List(p.bytes);
+      }
+      final bytes = allBytes.done().buffer.asUint8List();
 
-      final text = (res.text).trim();
+      // meta
+      final ui.Size size = ui.Size(img.width.toDouble(), img.height.toDouble());
+
+      final rotation = _rotationFromDeg(cam.description.sensorOrientation);
+
+      final format =
+          InputImageFormatValue.fromRawValue(img.format.raw) ??
+              InputImageFormat.yuv420;
+
+      final meta = InputImageMetadata(
+        size: size,
+        rotation: rotation,
+        format: format,
+        bytesPerRow: img.planes.first.bytesPerRow,
+      );
+
+      final input = InputImage.fromBytes(bytes: bytes, metadata: meta);
+
+      final result = await _ocr.processImage(input);
+      final text = result.text.trim();
+
       if (text.isNotEmpty && mounted) {
-        // Return raw OCR text to NewTransaction screen
-        await _stopStream();
-        Navigator.pop(context, text);
+        setState(() => _lastText = text);
       }
     } catch (_) {
-      // ignore frame errors
+      // ignore frame errors (keep stream alive)
     } finally {
       _busy = false;
     }
   }
 
-  InputImage _toInputImage(CameraImage img, int rotationDeg) {
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final p in img.planes) {
-      allBytes.putUint8List(p.bytes);
-    }
-    final bytes = allBytes.done().buffer.asUint8List();
-
-    final size = Size(img.width.toDouble(), img.height.toDouble());
-
-    final rotation = switch (rotationDeg) {
-      90 => InputImageRotation.rotation90deg,
-      180 => InputImageRotation.rotation180deg,
-      270 => InputImageRotation.rotation270deg,
-      _ => InputImageRotation.rotation0deg,
-    };
-
-    final format = InputImageFormat.nv21; // yuv420 on Android usually maps ok
-    final planeData = img.planes
-        .map((p) => InputImagePlaneMetadata(
-              bytesPerRow: p.bytesPerRow,
-              height: p.height,
-              width: p.width,
-            ))
-        .toList();
-
-    final meta = InputImageMetadata(
-      size: size,
-      rotation: rotation,
-      format: format,
-      bytesPerRow: img.planes.first.bytesPerRow,
-      planeData: planeData,
-    );
-
-    return InputImage.fromBytes(bytes: bytes, metadata: meta);
-  }
-
-  Future<void> _stopStream() async {
-    final ctrl = _cam;
-    if (ctrl == null) return;
-    try {
-      await ctrl.stopImageStream();
-    } catch (_) {}
-  }
-
   @override
   void dispose() {
-    _ocr.close();
-    final ctrl = _cam;
-    _cam = null;
-    if (ctrl != null) {
-      ctrl.dispose();
-    }
+    () async {
+      try {
+        if (_streaming) {
+          await _cam?.stopImageStream();
+        }
+      } catch (_) {}
+      await _cam?.dispose();
+      await _ocr.close();
+    }();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final cam = _cam;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Live Scan"),
+        actions: [
+          IconButton(
+            tooltip: "Use",
+            icon: const Icon(Icons.check),
+            onPressed: () {
+              Navigator.pop(context, _lastText);
+            },
+          ),
+        ],
       ),
-      body: !_ready || _cam == null
+      body: cam == null || !cam.value.isInitialized
           ? const Center(child: CircularProgressIndicator())
           : Stack(
               children: [
-                CameraPreview(_cam!),
+                CameraPreview(cam),
                 Align(
                   alignment: Alignment.bottomCenter,
                   child: Container(
+                    width: double.infinity,
                     padding: const EdgeInsets.all(12),
-                    color: Colors.black.withOpacity(0.35),
-                    child: const Text(
-                      "Messenger message ကို camera နဲ့ တန်းဖတ်ပါ\nText တွေ့တာနဲ့ auto-fill သွားမယ်",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    color: Colors.black.withOpacity(0.55),
+                    child: Text(
+                      _lastText.isEmpty ? "Scanning..." : _lastText,
+                      style: const TextStyle(color: Colors.white),
+                      maxLines: 6,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
