@@ -241,40 +241,6 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
               final parsed = OcrParser.parse(t);
 
               setState(() {
-                _type = "withdraw";
-
-                final name = parsed.name.trim();
-                final phone = parsed.phone.trim();
-                final method = parsed.method.trim();
-                final amount = parsed.amount;
-
-                if (name.isNotEmpty) {
-                  _name.text = name;
-                  final parts = <String>[];
-                  if (method.isNotEmpty) parts.add(method);
-                  if (phone.isNotEmpty) parts.add(phone);
-                  _desc.text = parts.join(" ");
-                } else {
-                  if (phone.isNotEmpty) _name.text = phone;
-                  _desc.text = method;
-                }
-
-                if (amount > 0) _amount.text = amount.toString();
-              });
-            },
-          ),
-// removed stray onPressed
-              final scannedText = await Navigator.of(context).push<String?>(
-                MaterialPageRoute(builder: (_) => const ScanScreen()),
-              );
-              if (!context.mounted) return;
-
-              final t = (scannedText ?? "").trim();
-              if (t.isEmpty) return;
-
-              final parsed = OcrParser.parse(t);
-
-              setState(() {
                 // force withdraw only
                 _type = "withdraw";
 
@@ -283,6 +249,8 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
                 final method = parsed.method.trim();
                 final amount = parsed.amount;
 
+                // Transaction form has no phone field.
+                // If name missing -> store phone into name.
                 if (name.isNotEmpty) {
                   _name.text = name;
                   final parts = <String>[];
@@ -290,19 +258,17 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
                   if (phone.isNotEmpty) parts.add(phone);
                   _desc.text = parts.join(" ");
                 } else {
-                  // no name -> keep phone in name field
                   if (phone.isNotEmpty) _name.text = phone;
                   _desc.text = method;
                 }
 
                 if (amount > 0) _amount.text = amount.toString();
-                // commission is always manual
+                // commission stays manual
               });
             },
           ),
         ],
       ),
-
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Container(
