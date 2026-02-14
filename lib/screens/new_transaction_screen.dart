@@ -49,37 +49,59 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
   void initState() {
     super.initState();
 
-    // Auto-fill from Scan (withdraw only)
-    if (widget.existing == null && (widget.scanText ?? '').trim().isNotEmpty) {
-      final parsed = OcrParser.parse(widget.scanText!.trim());
-      _type = 'withdraw';
-      if (parsed.name.isNotEmpty) _name.text = parsed.name;
-      final descParts = <String>[];
-      if (parsed.method.isNotEmpty) descParts.add(parsed.method);
-      if (parsed.phone.isNotEmpty) descParts.add(parsed.phone);
-      if (descParts.isNotEmpty) _desc.text = descParts.join(' ');
-      if (parsed.amount > 0) _amount.text = parsed.amount.toString();
-    }
-txStore.load();
+    txStore.load();
 
     final ex = widget.existing;
+
     if (ex != null) {
+      // EDIT MODE
       _date = DateTime.fromMillisecondsSinceEpoch(ex.dateMs);
       _date = DateTime(_date.year, _date.month, _date.day);
+
       _seqNo = ex.seqNo;
       _type = ex.type;
+
       _desc.text = ex.description;
       _name.text = ex.personName;
+
       _amount.text = ex.amountKs.toString();
       _comm.text = ex.commissionKs.toString();
     } else {
+      // NEW MODE
       _seqNo = txStore.nextSeqNo(widget.bossId);
       _date = DateTime(_date.year, _date.month, _date.day);
+
+      final st = (widget.scanText ?? '').trim();
+      if (st.isNotEmpty) {
+        final parsed = OcrParser.parse(st); // Map<String, dynamic>
+
+        final name = (parsed["name"] ?? "").toString().trim();
+        final method = (parsed["method"] ?? "").toString().trim();
+        final phone = (parsed["phone"] ?? "").toString().trim();
+
+        final amountRaw = (parsed["amount"] ?? 0).toString();
+        final amount = int.tryParse(amountRaw) ?? 0;
+
+        // force withdraw only
+        _type = "withdraw";
+
+        if (name.isNotEmpty) _name.text = name;
+
+        final parts = <String>[];
+        if (method.isNotEmpty) parts.add(method);
+        if (phone.isNotEmpty) parts.add(phone);
+        if (parts.isNotEmpty) _desc.text = parts.join(" ");
+
+        if (amount > 0) _amount.text = amount.toString();
+        // commission always manual -> do nothing
+      }
     }
 
     _amount.addListener(_rebuild);
     _comm.addListener(_rebuild);
+    _rebuild();
   }
+
 
   void _rebuild() {
     if (mounted) setState(() {});
