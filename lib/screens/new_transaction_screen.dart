@@ -237,14 +237,14 @@ class _NewTransactionScreenState extends State<NewTransactionScreen> {
                 final parsed = OcrParser.parse(t);
                 setState(() {
                   _type = "withdraw";
-                  if (parsed.name.isNotEmpty) _name.text = parsed.name;
+                  if ((parsed["name"] ?? "").toString().trim().isNotEmpty) _name.text = (parsed["name"] ?? "").toString().trim();
 
                   final descParts = <String>[];
-                  if (parsed.method.isNotEmpty) descParts.add(parsed.method);
-                  if (parsed.phone.isNotEmpty) descParts.add(parsed.phone);
+                  if ((parsed["method"] ?? "").toString().trim().isNotEmpty) descParts.add((parsed["method"] ?? "").toString().trim());
+                  if ((parsed["phone"] ?? "").toString().trim().isNotEmpty) descParts.add((parsed["phone"] ?? "").toString().trim());
                   if (descParts.isNotEmpty) _desc.text = descParts.join(" ");
 
-                  if (parsed.amount > 0) _amount.text = parsed.amount.toString();
+                  if ((int.tryParse((parsed["amount"] ?? 0).toString()) ?? 0) > 0) _amount.text = (int.tryParse((parsed["amount"] ?? 0).toString()) ?? 0).toString();
                 });
               },
             ),
