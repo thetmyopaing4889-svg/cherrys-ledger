@@ -15,7 +15,6 @@ import 'package:cherrys_ledger/screens/scan_screen.dart';
 import 'package:cherrys_ledger/utils/ocr_parser.dart';
 import 'package:cherrys_ledger/screens/transaction_form.dart';
 
-ElevatedButton(
   onPressed: () async {
     final scannedText = await Navigator.push(
       context,
