@@ -6,6 +6,7 @@ import '../main.dart';
 import '../models/boss.dart';
 import 'add_boss_screen.dart';
 import 'new_transaction_screen.dart';
+import 'bulk_paste_import_screen.dart';
 
 class BossDetailScreen extends StatefulWidget {
   final String bossId;
@@ -223,6 +224,24 @@ class _BossDetailScreenState extends State<BossDetailScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: _ActionBtn(
+                icon: Icons.content_paste_go_rounded,
+                text: "Bulk Paste Import",
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => BulkPasteImportScreen(
+                        bossId: b.id,
+                        bossName: b.name,
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
