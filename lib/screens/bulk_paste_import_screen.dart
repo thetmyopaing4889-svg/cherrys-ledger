@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../models/ledger_tx.dart';
 
@@ -123,7 +125,6 @@ class _DraftRow {
 class _BulkParser {
   /// Each queue block → exactly ONE draft row.
   static _DraftRow parseBlock(String block) {
-    // Split into non-empty lines; blank lines are ignored (rule 1)
     final lines = block
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
@@ -139,14 +140,12 @@ class _BulkParser {
     final fullText = lines.join(' ');
     final lower    = fullText.toLowerCase();
 
-    // Detect phone, method, amount
     final phone    = _findPhone(fullText);
     final method   = _detectMethod(lower);
     final transfer = _extractAmount(lower, phone);
 
-    // Extract name from lines
     final name       = _extractName(lines, phone, transfer);
-    final personName = name.isNotEmpty ? name : phone;
+    final personName = name.isNotEmpty ? name : (phone.isNotEmpty ? phone : '');
 
     return _DraftRow(
       name:     personName,
@@ -176,7 +175,7 @@ class _BulkParser {
         RegExp(r'\bkbz\s*pay\b').hasMatch(lower)) {
       return _mKBZPay;
     }
-    // WavePay  (Wave / WavePay / wave pay)
+    // WavePay (Wave / WavePay / wave pay)
     if (lower.contains('wavepay') ||
         RegExp(r'\bwave\s*pay\b').hasMatch(lower) ||
         RegExp(r'\bwave\b').hasMatch(lower)) {
@@ -187,8 +186,9 @@ class _BulkParser {
         RegExp(r'\bk\s*pay\b').hasMatch(lower)) {
       return _mKPay;
     }
-    // Banking
-    if (RegExp(r'\bkbz\b').hasMatch(lower))  return _mKBZ;
+    // KBZ acc / KBZ sp / KBZ bank → all = KBZ
+    // (matched before generic \bkbz\b so we can strip qualifiers in name)
+    if (RegExp(r'\bkbz\b').hasMatch(lower)) return _mKBZ;
     if (RegExp(r'\bcb\b').hasMatch(lower))   return _mCB;
     if (RegExp(r'\byoma\b').hasMatch(lower)) return _mYoma;
     return '';
@@ -197,38 +197,40 @@ class _BulkParser {
   // ── amount extraction ──
 
   static int _extractAmount(String lower, String phone) {
-    // Remove phone digits so they aren't treated as amounts
     var text = lower;
     if (phone.isNotEmpty) text = text.replaceAll(phone, ' ');
     text = text.replaceAll(RegExp(r'09\d{7,9}'), ' ');
+    // Also remove long bank account numbers (≥10 pure digits)
+    text = text.replaceAll(RegExp(r'\b\d{10,}\b'), ' ');
 
-    // 1) Myanmar unit: သိန်း  = × 100,000
-    //    Handles: "15. သိန်း", "3. သိန်း", "1.5 သိန်း"
-    final lakhRe = RegExp(r'(\d+\.?\d*)\s*(သိန်း)');
-    var m = lakhRe.firstMatch(text);
-    if (m != null) {
+    // ── Combined Myanmar units: sum ALL သိန်း + ALL သောင်း ──
+    // e.g. "100 သိန်း 4သောင်း" = 10,000,000 + 40,000 = 10,040,000
+    final lakhRe  = RegExp(r'(\d+\.?\d*)\s*သိန်း');
+    final thousRe = RegExp(r'(\d+\.?\d*)\s*သောင်း');
+
+    int lakhTotal  = 0;
+    for (final m in lakhRe.allMatches(text)) {
       final val = double.tryParse(m.group(1)!) ?? 0.0;
-      if (val > 0) return (val * 100000).round();
+      lakhTotal += (val * 100000).round();
     }
 
-    // 2) English lakh
+    int thousTotal = 0;
+    for (final m in thousRe.allMatches(text)) {
+      final val = double.tryParse(m.group(1)!) ?? 0.0;
+      thousTotal += (val * 10000).round();
+    }
+
+    if (lakhTotal > 0 || thousTotal > 0) return lakhTotal + thousTotal;
+
+    // English lakh
     final lakhEn = RegExp(r'(\d+\.?\d*)\s*l(?:akh)?\b', caseSensitive: false);
-    m = lakhEn.firstMatch(text);
-    if (m != null) {
-      final val = double.tryParse(m.group(1)!) ?? 0.0;
+    final lakhEnMatch = lakhEn.firstMatch(text);
+    if (lakhEnMatch != null) {
+      final val = double.tryParse(lakhEnMatch.group(1)!) ?? 0.0;
       if (val > 0) return (val * 100000).round();
     }
 
-    // 3) Myanmar unit: သောင်း = × 10,000
-    final thousRe = RegExp(r'(\d+\.?\d*)\s*(သောင်း)');
-    m = thousRe.firstMatch(text);
-    if (m != null) {
-      final val = double.tryParse(m.group(1)!) ?? 0.0;
-      if (val > 0) return (val * 10000).round();
-    }
-
-    // 4) Plain number — largest wins
-    //    Handles: "411500.", "3000000", "1,000,000"
+    // Plain number — largest wins (skip long account numbers ≥ 10 digits)
     final numRe = RegExp(r'(\d[\d,]*\.?\d*)');
     int maxVal = 0;
     for (final match in numRe.allMatches(text)) {
@@ -236,6 +238,8 @@ class _BulkParser {
           .group(1)!
           .replaceAll(',', '')
           .replaceAll(RegExp(r'\.$'), '');
+      // Skip long bank account numbers
+      if (raw.replaceAll('.', '').length >= 10) continue;
       final val = (double.tryParse(raw) ?? 0.0).round();
       if (val > maxVal) maxVal = val;
     }
@@ -252,13 +256,19 @@ class _BulkParser {
       if (phone.isNotEmpty && line == phone) continue;
       if (RegExp(r'^09\d{7,9}$').hasMatch(line)) continue;
 
+      // Skip pure long bank account number lines (≥ 10 digits)
+      if (RegExp(r'^\d{10,}$').hasMatch(line)) continue;
+
       var cleaned = line;
 
       // Remove phone from line
       if (phone.isNotEmpty) cleaned = cleaned.replaceAll(phone, '');
 
-      // Remove method keywords (case-insensitive, priority order)
+      // Remove method keywords and banking qualifiers
       cleaned = _stripMethods(cleaned);
+
+      // Remove long bank account numbers mid-line
+      cleaned = cleaned.replaceAll(RegExp(r'\b\d{10,}\b'), '');
 
       // Remove Myanmar unit amount expressions
       cleaned = cleaned.replaceAll(RegExp(r'\d+\.?\d*\s*သိန်း'), '');
@@ -281,7 +291,7 @@ class _BulkParser {
 
   static String _stripMethods(String text) {
     var t = text;
-    // Wave Password first (longer match wins over shorter "wave")
+    // Wave Password first
     t = t.replaceAll(
         RegExp(r'\bwave\s*(?:pw|pass(?:w(?:or)?d|od)?)\b',
             caseSensitive: false),
@@ -301,6 +311,11 @@ class _BulkParser {
     t = t.replaceAll(RegExp(r'\bkbz\b', caseSensitive: false), '');
     t = t.replaceAll(RegExp(r'\bcb\b', caseSensitive: false), '');
     t = t.replaceAll(RegExp(r'\byoma\b', caseSensitive: false), '');
+    // Strip banking qualifiers that must not leak into name
+    t = t.replaceAll(RegExp(r'\bacc(?:ount)?\b', caseSensitive: false), '');
+    t = t.replaceAll(RegExp(r'\bsp\b', caseSensitive: false), '');
+    t = t.replaceAll(RegExp(r'\bspecial\b', caseSensitive: false), '');
+    t = t.replaceAll(RegExp(r'\bbanking?\b', caseSensitive: false), '');
     return t;
   }
 }
@@ -341,17 +356,21 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
   final List<String>    _queue  = [];
   final List<_DraftRow> _drafts = [];
 
-  // ── table column widths ──
-  static const _wNo   = 30.0;
-  static const _wName = 130.0;
-  static const _wMeth = 112.0;
-  static const _wTran =  88.0;
-  static const _wChg  =  78.0;
-  static const _wAmt  =  88.0;
-  static const _wComm =  80.0;
-  static const _wTot  =  88.0;
-  static const _wStat =  52.0;
-  static const _wDel  =  36.0;
+  // ── compact table column widths ──
+  // Order: # | Name | Method | Trf | Comm | Chg | Amt | Total | OK | Del
+  static const _wNo   = 28.0;
+  static const _wName = 120.0;
+  static const _wMeth = 100.0;
+  static const _wTran =  80.0;
+  static const _wComm =  76.0;
+  static const _wChg  =  68.0;
+  static const _wAmt  =  80.0;
+  static const _wTot  =  80.0;
+  static const _wStat =  44.0;
+  static const _wDel  =  32.0;
+
+  // ── auto-save key ──
+  String get _sessionKey => 'bulk_session_${widget.bossId}';
 
   // ─────────────────────────────────────────────────────────────
   // Lifecycle
@@ -363,6 +382,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     final n = DateTime.now();
     _date = DateTime(n.year, n.month, n.day);
     txStore.load();
+    _tryRestore();
   }
 
   @override
@@ -370,6 +390,121 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     _pasteCtrl.dispose();
     for (final d in _drafts) d.dispose();
     super.dispose();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Auto-save / restore
+  // ─────────────────────────────────────────────────────────────
+
+  Future<void> _autoSave() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'bossId': widget.bossId,
+        'dateMs': _date.millisecondsSinceEpoch,
+        'txType': _txType,
+        'queue': _queue,
+        'drafts': _drafts.map((d) => {
+          'name':       d.nameCtrl.text,
+          'method':     d.methodCtrl.text,
+          'transfer':   d.transfer,
+          'phone':      d.originalPhone,
+          'commission': d.commission,
+        }).toList(),
+      };
+      await prefs.setString(_sessionKey, jsonEncode(data));
+    } catch (_) {}
+  }
+
+  Future<void> _clearSavedSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_sessionKey);
+    } catch (_) {}
+  }
+
+  Future<void> _tryRestore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw   = prefs.getString(_sessionKey);
+      if (raw == null || raw.isEmpty) return;
+
+      final data       = jsonDecode(raw) as Map<String, dynamic>;
+      final savedBoss  = data['bossId'] as String? ?? '';
+      if (savedBoss != widget.bossId) return;
+
+      final queueList = (data['queue'] as List<dynamic>?) ?? [];
+      final draftList = (data['drafts'] as List<dynamic>?) ?? [];
+
+      if (queueList.isEmpty && draftList.isEmpty) return;
+
+      // Show restore prompt
+      if (!mounted) return;
+      final restore = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(22)),
+          title: const Text('မပြီးသေးသော Draft',
+              style: TextStyle(fontWeight: FontWeight.w900)),
+          content: Text(
+            'Queue ${queueList.length} ခု, Draft row ${draftList.length} ခု ရှိသေးသည်။\n'
+            'ဆက်လုပ်မည်လား?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Clear', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _cherry,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Restore',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
+      );
+
+      if (restore != true) {
+        await _clearSavedSession();
+        return;
+      }
+
+      // Restore date
+      final dateMs = data['dateMs'] as int?;
+      if (dateMs != null) {
+        final d = DateTime.fromMillisecondsSinceEpoch(dateMs);
+        _date = DateTime(d.year, d.month, d.day);
+      }
+
+      // Restore txType
+      final txType = data['txType'] as String?;
+      if (txType != null) _txType = txType;
+
+      // Restore queue
+      _queue.addAll(queueList.map((e) => e.toString()));
+
+      // Restore draft rows
+      for (final item in draftList) {
+        final m = item as Map<String, dynamic>;
+        _drafts.add(_DraftRow(
+          name:       m['name']       as String? ?? '',
+          method:     m['method']     as String? ?? '',
+          transfer:   m['transfer']   as int?    ?? 0,
+          phone:      m['phone']      as String? ?? '',
+          commission: m['commission'] as int?    ?? 0,
+        ));
+      }
+
+      if (mounted) setState(() {});
+    } catch (_) {}
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -405,16 +540,23 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
       firstDate: DateTime(2020),
       lastDate:  DateTime(2100),
     );
-    if (p != null) setState(() => _date = DateTime(p.year, p.month, p.day));
+    if (p != null) {
+      setState(() => _date = DateTime(p.year, p.month, p.day));
+      _autoSave();
+    }
   }
 
   void _addToQueue() {
     final t = _pasteCtrl.text.trim();
     if (t.isEmpty) { _snack('ကူးကပ်ထားသောစာသား မရှိပါ။'); return; }
     setState(() { _queue.add(t); _pasteCtrl.clear(); });
+    _autoSave();
   }
 
-  void _clearQueue() => setState(() => _queue.clear());
+  void _clearQueue() {
+    setState(() { _queue.clear(); _drafts.clear(); });
+    _clearSavedSession();
+  }
 
   void _parseAll() {
     if (_queue.isEmpty) {
@@ -423,11 +565,11 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     }
     for (final d in _drafts) d.dispose();
     _drafts.clear();
-    // Each queue item = one block = one draft row
     for (final block in _queue) {
       _drafts.add(_BulkParser.parseBlock(block));
     }
     setState(() {});
+    _autoSave();
   }
 
   void _removeRow(int idx) {
@@ -435,6 +577,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
       _drafts[idx].dispose();
       _drafts.removeAt(idx);
     });
+    _autoSave();
   }
 
   Future<void> _confirmSaveAll() async {
@@ -462,12 +605,15 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
           description:  d.method,
           personName:   d.nameCtrl.text.trim(),
           type:         _txType,
-          amountKs:     d.amount,      // transfer + charge
+          amountKs:     d.amount,
           commissionKs: d.commission,
-          totalKs:      d.total,       // amount + commission
+          totalKs:      d.total,
           deleted:      false,
         ));
       }
+
+      // Clear saved draft session on success
+      await _clearSavedSession();
 
       if (!mounted) return;
       await showDialog(
@@ -489,8 +635,8 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
                     borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: () {
-                Navigator.pop(context); // close dialog
-                Navigator.pop(context); // back to BossDetail
+                Navigator.pop(context);
+                Navigator.pop(context);
               },
               child: const Text('OK',
                   style: TextStyle(fontWeight: FontWeight.w900)),
@@ -571,7 +717,24 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
             ),
           )),
           const SizedBox(width: 12),
-          Expanded(child: _typeToggle()),
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _typeToggle(),
+              const SizedBox(height: 4),
+              // Issue 2: helper text showing which type will be saved
+              Text(
+                _txType == 'withdraw'
+                    ? 'ဤစာရင်းအားလုံးကို ငွေထုတ် အဖြစ်သိမ်းမည်'
+                    : 'ဤစာရင်းအားလုံးကို ငွေသွင်း အဖြစ်သိမ်းမည်',
+                style: TextStyle(
+                  fontSize: 9,
+                  color: _txType == 'withdraw' ? _wdColor : _depColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          )),
         ]),
       ],
     ),
@@ -608,7 +771,10 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     final active = _txType == type;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
-      onTap: () => setState(() => _txType = type),
+      onTap: () {
+        setState(() => _txType = type);
+        _autoSave();
+      },
       child: Container(
         alignment: Alignment.center,
         decoration: BoxDecoration(
@@ -693,16 +859,16 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
 
   // ─────────────────────────────────────────────────────────────
   // Compact draft table card
+  // Column order: # | Name | Method | Trf | Comm | Chg | Amt | Total | OK | Del
   // ─────────────────────────────────────────────────────────────
 
   Widget _draftTableCard() => _card(
-    padding: const EdgeInsets.all(12),
+    padding: const EdgeInsets.all(10),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionLabel('Step 2 — Review & Edit  (${_drafts.length} rows)'),
         const SizedBox(height: 4),
-        // Horizontal scroll wraps the whole table (header + rows)
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Column(
@@ -718,20 +884,19 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     ),
   );
 
-  // Table header
   Widget _tableHeader() {
     const bg = Color(0xFFFFCFE0);
     return Row(children: [
-      _hCell('#',          _wNo,   bg: bg),
-      _hCell('Name',       _wName, bg: bg, left: true),
-      _hCell('Method',     _wMeth, bg: bg, left: true),
-      _hCell('Transfer',   _wTran, bg: bg),
-      _hCell('Charge',     _wChg,  bg: bg),
-      _hCell('Amount',     _wAmt,  bg: bg),
-      _hCell('Commission', _wComm, bg: bg),
-      _hCell('Total',      _wTot,  bg: bg),
-      _hCell('Status',     _wStat, bg: bg),
-      SizedBox(width: _wDel, height: 32,
+      _hCell('#',      _wNo,   bg: bg),
+      _hCell('Name',   _wName, bg: bg, left: true),
+      _hCell('Method', _wMeth, bg: bg, left: true),
+      _hCell('Trf',    _wTran, bg: bg),
+      _hCell('Comm',   _wComm, bg: bg),
+      _hCell('Chg',    _wChg,  bg: bg),
+      _hCell('Amt',    _wAmt,  bg: bg),
+      _hCell('Total',  _wTot,  bg: bg),
+      _hCell('OK',     _wStat, bg: bg),
+      SizedBox(width: _wDel, height: 28,
           child: Container(color: bg)),
     ]);
   }
@@ -739,21 +904,20 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
   Widget _hCell(String text, double w,
       {required Color bg, bool left = false}) {
     return SizedBox(
-      width: w, height: 32,
+      width: w, height: 28,
       child: Container(
         color: bg,
         alignment: left ? Alignment.centerLeft : Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Text(text, style: const TextStyle(
-            fontSize: 10, fontWeight: FontWeight.w900, color: _cherryDark)),
+            fontSize: 9, fontWeight: FontWeight.w900, color: _cherryDark)),
       ),
     );
   }
 
-  // Table data row
   Widget _tableDataRow(int idx, _DraftRow d) {
-    final isCheck = d.status == 'Check';
-    final rowBg = isCheck
+    final isCheck  = d.status == 'Check';
+    final rowBg    = isCheck
         ? const Color(0xFFFFF9C4)
         : (idx.isOdd ? _bgPink : Colors.white);
     final typeColor = _txType == 'deposit' ? _depColor : _wdColor;
@@ -761,23 +925,29 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // No
+        // #
         _staticCell('${idx + 1}', _wNo, bg: rowBg,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700)),
 
         // Name (editable)
         _editCell(d.nameCtrl, _wName,
-            onChanged: (_) => setState(() {})),
+            onChanged: (_) { setState(() {}); _autoSave(); }),
 
         // Method (editable)
         _editCell(d.methodCtrl, _wMeth,
-            onChanged: (_) => setState(() {})),
+            onChanged: (_) { setState(() {}); _autoSave(); }),
 
         // Transfer (editable, number)
         _editCell(d.transferCtrl, _wTran,
             keyboard: TextInputType.number,
             align: TextAlign.right,
-            onChanged: (_) => setState(() {})),
+            onChanged: (_) { setState(() {}); _autoSave(); }),
+
+        // Commission (editable, number) — before Chg/Amt so user sees it first
+        _editCell(d.commissionCtrl, _wComm,
+            keyboard: TextInputType.number,
+            align: TextAlign.right,
+            onChanged: (_) { setState(() {}); _autoSave(); }),
 
         // Charge (read-only, computed)
         _staticCell(
@@ -786,7 +956,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
           bg: rowBg,
           align: Alignment.centerRight,
           style: TextStyle(
-              fontSize: 10,
+              fontSize: 9,
               color: d.charge < 0 ? Colors.orange : Colors.black54,
               fontWeight: FontWeight.w600),
         ),
@@ -794,42 +964,36 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
         // Amount (read-only = transfer + charge)
         _staticCell(_fmtN(d.amount), _wAmt, bg: rowBg,
             align: Alignment.centerRight,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
-
-        // Commission (editable, number)
-        _editCell(d.commissionCtrl, _wComm,
-            keyboard: TextInputType.number,
-            align: TextAlign.right,
-            onChanged: (_) => setState(() {})),
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700)),
 
         // Total (read-only)
         _staticCell(_fmtN(d.total), _wTot, bg: rowBg,
             align: Alignment.centerRight,
-            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800,
+            style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800,
                 color: typeColor)),
 
         // Status badge
         SizedBox(
-          width: _wStat, height: 46,
+          width: _wStat, height: 40,
           child: Container(
             color: rowBg,
             alignment: Alignment.center,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               decoration: BoxDecoration(
                 color: isCheck ? Colors.orange : Colors.green,
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Text(d.status,
                   style: const TextStyle(color: Colors.white,
-                      fontSize: 9, fontWeight: FontWeight.w900)),
+                      fontSize: 8, fontWeight: FontWeight.w900)),
             ),
           ),
         ),
 
         // Delete
         SizedBox(
-          width: _wDel, height: 46,
+          width: _wDel, height: 40,
           child: Container(
             color: rowBg,
             alignment: Alignment.center,
@@ -837,7 +1001,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               icon: const Icon(Icons.delete_outline,
-                  color: Colors.red, size: 15),
+                  color: Colors.red, size: 14),
               onPressed: () => _removeRow(idx),
             ),
           ),
@@ -855,21 +1019,21 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     ValueChanged<String>? onChanged,
   }) {
     return SizedBox(
-      width: width, height: 46,
+      width: width, height: 40,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
         child: TextField(
           controller: ctrl,
           keyboardType: keyboard,
           textAlign: align,
-          style: const TextStyle(fontSize: 11),
+          style: const TextStyle(fontSize: 10),
           onChanged: onChanged,
           decoration: const InputDecoration(
             isDense: true,
             contentPadding:
-                EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+                EdgeInsets.symmetric(horizontal: 4, vertical: 5),
             border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(5))),
+                borderRadius: BorderRadius.all(Radius.circular(4))),
           ),
         ),
       ),
@@ -885,14 +1049,14 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     TextStyle? style,
   }) {
     return SizedBox(
-      width: width, height: 46,
+      width: width, height: 40,
       child: Container(
         color: bg ?? Colors.white,
         alignment: align,
-        padding: const EdgeInsets.symmetric(horizontal: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Text(text,
             style: style ??
-                const TextStyle(fontSize: 10, color: Colors.black87)),
+                const TextStyle(fontSize: 9, color: Colors.black87)),
       ),
     );
   }
