@@ -1,4 +1,4 @@
-package com.example.cherrys_ledger
+package com.cherrysledger.v2
 
 import io.flutter.embedding.android.FlutterActivity
 
