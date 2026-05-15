@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../models/ledger_tx.dart';
+import '../models/charge_rates.dart';
 
 // ─────────────────────────────────────────────────────────────
 // Method name constants
@@ -42,11 +43,12 @@ int _wavePasswordFee(int transfer) {
 }
 
 /// Banking charge rounded UP to the nearest 100 MMK.
-int _bankCharge(String method, int transfer) {
+/// Uses per-boss configurable rates from [ChargeRates].
+int _bankCharge(String method, int transfer, ChargeRates rates) {
   double rate;
-  if      (method == _mKBZ)  rate = 0.0002;   // 0.02 %
-  else if (method == _mCB)   rate = 0.00025;  // 0.025 %
-  else if (method == _mYoma) rate = 0.00015;  // 0.015 %
+  if      (method == _mKBZ)  rate = rates.kbzRate;
+  else if (method == _mCB)   rate = rates.cbRate;
+  else if (method == _mYoma) rate = rates.yomaRate;
   else return 0;
   final raw = transfer * rate;
   return (raw / 100).ceil() * 100;
@@ -62,6 +64,7 @@ class _DraftRow {
   final TextEditingController transferCtrl;
   final TextEditingController commissionCtrl;
   final String originalPhone;
+  final ChargeRates _rates;
 
   _DraftRow({
     required String name,
@@ -69,12 +72,14 @@ class _DraftRow {
     required int    transfer,
     required String phone,
     int commission = 0,
+    ChargeRates? rates,
   })  : nameCtrl       = TextEditingController(text: name),
         methodCtrl     = TextEditingController(text: method),
         transferCtrl   = TextEditingController(
             text: transfer > 0 ? transfer.toString() : ''),
         commissionCtrl = TextEditingController(text: commission.toString()),
-        originalPhone  = phone;
+        originalPhone  = phone,
+        _rates         = rates ?? const ChargeRates();
 
   void dispose() {
     nameCtrl.dispose();
@@ -98,7 +103,7 @@ class _DraftRow {
     if (t <= 0) return 0;
     if (method == _mWavePw) return _wavePasswordFee(t);
     if (method == _mKBZ || method == _mCB || method == _mYoma) {
-      return _bankCharge(method, t);
+      return _bankCharge(method, t, _rates);
     }
     return 0;
   }
@@ -348,16 +353,17 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
   static const _depColor   = Color(0xFF16A34A);
 
   // ── state ──
-  DateTime _date  = DateTime.now();
-  String _txType  = 'withdraw';
-  bool   _saving  = false;
+  DateTime    _date   = DateTime.now();
+  String      _txType = 'withdraw';
+  bool        _saving = false;
+  ChargeRates _rates  = const ChargeRates();
 
   final _pasteCtrl       = TextEditingController();
   final List<String>    _queue  = [];
   final List<_DraftRow> _drafts = [];
 
   // ── compact table column widths ──
-  // Order: # | Name | Method | Trf | Comm | Chg | Amt | Total | OK | Del
+  // Order: # | Method | Trf | Comm | Chg | Amt | Total | OK | Name | Del
   static const _wNo   = 28.0;
   static const _wName = 120.0;
   static const _wMeth = 100.0;
@@ -382,7 +388,12 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     final n = DateTime.now();
     _date = DateTime(n.year, n.month, n.day);
     txStore.load();
-    _tryRestore();
+    // Load per-boss charge rates, then restore any saved session
+    ChargeRates.loadForBoss(widget.bossId).then((r) {
+      if (!mounted) return;
+      setState(() => _rates = r);
+      _tryRestore();
+    });
   }
 
   @override
@@ -500,6 +511,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
           transfer:   m['transfer']   as int?    ?? 0,
           phone:      m['phone']      as String? ?? '',
           commission: m['commission'] as int?    ?? 0,
+          rates:      _rates,
         ));
       }
 
@@ -566,7 +578,16 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     for (final d in _drafts) d.dispose();
     _drafts.clear();
     for (final block in _queue) {
-      _drafts.add(_BulkParser.parseBlock(block));
+      final row = _BulkParser.parseBlock(block);
+      _drafts.add(_DraftRow(
+        name:       row.nameCtrl.text,
+        method:     row.methodCtrl.text,
+        transfer:   row.transfer,
+        phone:      row.originalPhone,
+        commission: row.commission,
+        rates:      _rates,
+      ));
+      row.dispose();
     }
     setState(() {});
     _autoSave();
@@ -888,7 +909,6 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     const bg = Color(0xFFFFCFE0);
     return Row(children: [
       _hCell('#',      _wNo,   bg: bg),
-      _hCell('Name',   _wName, bg: bg, left: true),
       _hCell('Method', _wMeth, bg: bg, left: true),
       _hCell('Trf',    _wTran, bg: bg),
       _hCell('Comm',   _wComm, bg: bg),
@@ -896,6 +916,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
       _hCell('Amt',    _wAmt,  bg: bg),
       _hCell('Total',  _wTot,  bg: bg),
       _hCell('OK',     _wStat, bg: bg),
+      _hCell('Name',   _wName, bg: bg, left: true),
       SizedBox(width: _wDel, height: 28,
           child: Container(color: bg)),
     ]);
@@ -929,10 +950,6 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
         _staticCell('${idx + 1}', _wNo, bg: rowBg,
             style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700)),
 
-        // Name (editable)
-        _editCell(d.nameCtrl, _wName,
-            onChanged: (_) { setState(() {}); _autoSave(); }),
-
         // Method (editable)
         _editCell(d.methodCtrl, _wMeth,
             onChanged: (_) { setState(() {}); _autoSave(); }),
@@ -943,7 +960,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
             align: TextAlign.right,
             onChanged: (_) { setState(() {}); _autoSave(); }),
 
-        // Commission (editable, number) — before Chg/Amt so user sees it first
+        // Commission (editable, number)
         _editCell(d.commissionCtrl, _wComm,
             keyboard: TextInputType.number,
             align: TextAlign.right,
@@ -990,6 +1007,10 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
             ),
           ),
         ),
+
+        // Name (editable) — moved to right so Comm/Chg are visible first
+        _editCell(d.nameCtrl, _wName,
+            onChanged: (_) { setState(() {}); _autoSave(); }),
 
         // Delete
         SizedBox(

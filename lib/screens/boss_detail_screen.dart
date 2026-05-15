@@ -7,6 +7,7 @@ import '../models/boss.dart';
 import 'add_boss_screen.dart';
 import 'new_transaction_screen.dart';
 import 'bulk_paste_import_screen.dart';
+import 'charge_rates_screen.dart';
 
 class BossDetailScreen extends StatefulWidget {
   final String bossId;
@@ -235,6 +236,24 @@ class _BossDetailScreenState extends State<BossDetailScreen> {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => BulkPasteImportScreen(
+                        bossId: b.id,
+                        bossName: b.name,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: _ActionBtn(
+                icon: Icons.percent_rounded,
+                text: "Charge Rates",
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ChargeRatesScreen(
                         bossId: b.id,
                         bossName: b.name,
                       ),
