@@ -188,8 +188,9 @@ class _BulkParser {
         RegExp(r'\bk\s*pay\b').hasMatch(lower)) {
       return _mKPay;
     }
-    // KBZ acc / KBZ sp / KBZ bank → all = KBZ
-    if (RegExp(r'\bkbz\b').hasMatch(lower)) return _mKBZ;
+    // KBZ acc / KBZ sp / KBZSp / KBZ bank → all = KBZ
+    // Note: lower.contains('kbz') is safe here — KBZPay already caught above
+    if (lower.contains('kbz')) return _mKBZ;
     if (RegExp(r'\bcb\b').hasMatch(lower))   return _mCB;
     if (RegExp(r'\byoma\b').hasMatch(lower)) return _mYoma;
 
@@ -686,7 +687,7 @@ $blocks''';
         .post(
           Uri.parse(
             'https://generativelanguage.googleapis.com/v1beta/models/'
-            'gemini-1.5-flash:generateContent?key=$apiKey',
+            'gemini-2.0-flash:generateContent?key=$apiKey',
           ),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
