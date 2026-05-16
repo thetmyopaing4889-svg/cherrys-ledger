@@ -21,24 +21,11 @@ const _mYoma     = 'Yoma';
 // Charge helpers
 // ─────────────────────────────────────────────────────────────
 
-/// Returns Wave Password fee, or -1 if amount is outside the fee table.
-int _wavePasswordFee(int transfer) {
-  if (transfer <=    10000) return    500;
-  if (transfer <=    25000) return    700;
-  if (transfer <=    50000) return  1000;
-  if (transfer <=   100000) return  1500;
-  if (transfer <=   150000) return  2000;
-  if (transfer <=   200000) return  2500;
-  if (transfer <=   300000) return  3000;
-  if (transfer <=   400000) return  4000;
-  if (transfer <=   500000) return  4500;
-  if (transfer <=   600000) return  5500;
-  if (transfer <=   700000) return  6000;
-  if (transfer <=   800000) return  6700;
-  if (transfer <=   900000) return  7500;
-  if (transfer <=  1000000) return  8000;
-  if (transfer <=  2000000) return 15000;
-  if (transfer <=  3000000) return 20000;
+/// Returns Wave Password fee using boss-configured table, or -1 if outside.
+int _wavePasswordFee(int transfer, ChargeRates rates) {
+  for (final entry in rates.effectiveWaveFeeTable) {
+    if (transfer <= (entry['max'] ?? 0)) return entry['fee'] ?? 0;
+  }
   return -1; // outside table
 }
 
@@ -111,15 +98,12 @@ class _DraftRow {
   int get charge {
     final t = transfer;
     if (t <= 0) return 0;
-    if (method == _mWavePw) return _wavePasswordFee(t);
-    if (method == _mKBZ || method == _mCB || method == _mYoma) {
-      return _bankCharge(method, t, _rates);
-    }
-    return 0;
+    if (method == _mWavePw) return _wavePasswordFee(t, _rates);
+    return _bankCharge(method, t, _rates); // handles KBZ/CB/Yoma + extraRates
   }
 
   bool get outsideTable =>
-      method == _mWavePw && transfer > 0 && _wavePasswordFee(transfer) < 0;
+      method == _mWavePw && transfer > 0 && _wavePasswordFee(transfer, _rates) < 0;
 
   /// amountKs = transfer + charge (charge = 0 when outside table, status = Check)
   int get amount => transfer + (charge < 0 ? 0 : charge);
@@ -139,7 +123,8 @@ class _DraftRow {
 
 class _BulkParser {
   /// Each queue block → exactly ONE draft row.
-  static _DraftRow parseBlock(String block) {
+  static _DraftRow parseBlock(String block,
+      {ChargeRates rates = const ChargeRates()}) {
     final lines = block
         .replaceAll('\r\n', '\n')
         .replaceAll('\r', '\n')
@@ -156,7 +141,7 @@ class _BulkParser {
     final lower    = fullText.toLowerCase();
 
     final phone    = _findPhone(fullText);
-    final method   = _detectMethod(lower);
+    final method   = _detectMethod(lower, rates: rates);
     final transfer = _extractAmount(lower, phone);
 
     final name       = _extractName(lines, phone, transfer);
@@ -179,7 +164,8 @@ class _BulkParser {
 
   // ── method detection (priority order) ──
 
-  static String _detectMethod(String lower) {
+  static String _detectMethod(String lower,
+      {ChargeRates rates = const ChargeRates()}) {
     // Wave Password BEFORE WavePay (overlapping keyword "wave")
     if (RegExp(r'\bwave\s*(?:pw|pass(?:w(?:or)?d|od)?)\b').hasMatch(lower) ||
         RegExp(r'\bwavepw\b').hasMatch(lower)) {
@@ -202,10 +188,14 @@ class _BulkParser {
       return _mKPay;
     }
     // KBZ acc / KBZ sp / KBZ bank → all = KBZ
-    // (matched before generic \bkbz\b so we can strip qualifiers in name)
     if (RegExp(r'\bkbz\b').hasMatch(lower)) return _mKBZ;
     if (RegExp(r'\bcb\b').hasMatch(lower))   return _mCB;
     if (RegExp(r'\byoma\b').hasMatch(lower)) return _mYoma;
+
+    // Custom extra banks (case-insensitive match)
+    for (final entry in rates.extraRates.entries) {
+      if (lower.contains(entry.key.toLowerCase())) return entry.key;
+    }
     return '';
   }
 
@@ -378,8 +368,8 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
   static const _wName = 120.0;
   static const _wMeth = 100.0;
   static const _wTran =  80.0;
-  static const _wComm =  76.0;
-  static const _wChg  =  68.0;
+  static const _wComm =  60.0;
+  static const _wChg  =  54.0;
   static const _wAmt  =  80.0;
   static const _wTot  =  80.0;
   static const _wStat =  44.0;
@@ -588,7 +578,7 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     for (final d in _drafts) d.dispose();
     _drafts.clear();
     for (final block in _queue) {
-      final row = _BulkParser.parseBlock(block);
+      final row = _BulkParser.parseBlock(block, rates: _rates);
       _drafts.add(_DraftRow(
         name:       row.nameCtrl.text,
         method:     row.methodCtrl.text,
@@ -960,8 +950,14 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
         _staticCell('${idx + 1}', _wNo, bg: rowBg,
             style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700)),
 
-        // Method (editable)
+        // Method (editable) — orange bg when commission needed but still 0
         _editCell(d.methodCtrl, _wMeth,
+            bgColor: (d.method.isNotEmpty &&
+                    d.method != _mWavePay &&
+                    d.method != _mWavePw &&
+                    d.commission == 0)
+                ? const Color(0xFFFFE0B2)
+                : null,
             onChanged: (_) { setState(() {}); _autoSave(); }),
 
         // Transfer (editable, number)
@@ -1047,24 +1043,28 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     double width, {
     TextInputType keyboard = TextInputType.text,
     TextAlign align = TextAlign.left,
+    Color? bgColor,
     ValueChanged<String>? onChanged,
   }) {
     return SizedBox(
       width: width, height: 40,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-        child: TextField(
-          controller: ctrl,
-          keyboardType: keyboard,
-          textAlign: align,
-          style: const TextStyle(fontSize: 10),
-          onChanged: onChanged,
-          decoration: const InputDecoration(
-            isDense: true,
-            contentPadding:
-                EdgeInsets.symmetric(horizontal: 4, vertical: 5),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(4))),
+      child: Container(
+        color: bgColor,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+          child: TextField(
+            controller: ctrl,
+            keyboardType: keyboard,
+            textAlign: align,
+            style: const TextStyle(fontSize: 10),
+            onChanged: onChanged,
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(4))),
+            ),
           ),
         ),
       ),

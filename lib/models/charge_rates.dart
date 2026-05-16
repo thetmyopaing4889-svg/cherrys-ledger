@@ -2,35 +2,72 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ChargeRates {
-  final double kbzRate;   // e.g. 0.0002 = 0.02%
-  final double cbRate;    // e.g. 0.00025 = 0.025%
-  final double yomaRate;  // e.g. 0.00015 = 0.015%
-  final Map<String, double> extraRates; // e.g. {"AYA": 0.0002}
+  final double kbzRate;
+  final double cbRate;
+  final double yomaRate;
+  final Map<String, double> extraRates;
+  // null = use defaultWaveFeeTable
+  final List<Map<String, int>>? waveFeeTable;
 
   const ChargeRates({
-    this.kbzRate  = 0.0002,
-    this.cbRate   = 0.00025,
-    this.yomaRate = 0.00015,
-    this.extraRates = const {},
+    this.kbzRate      = 0.0002,
+    this.cbRate       = 0.00025,
+    this.yomaRate     = 0.00015,
+    this.extraRates   = const {},
+    this.waveFeeTable,
   });
 
   static const ChargeRates defaults = ChargeRates();
 
+  static const List<Map<String, int>> defaultWaveFeeTable = [
+    {'max': 10000,   'fee': 500},
+    {'max': 25000,   'fee': 700},
+    {'max': 50000,   'fee': 1000},
+    {'max': 100000,  'fee': 1500},
+    {'max': 150000,  'fee': 2000},
+    {'max': 200000,  'fee': 2500},
+    {'max': 300000,  'fee': 3000},
+    {'max': 400000,  'fee': 4000},
+    {'max': 500000,  'fee': 4500},
+    {'max': 600000,  'fee': 5500},
+    {'max': 700000,  'fee': 6000},
+    {'max': 800000,  'fee': 6700},
+    {'max': 900000,  'fee': 7500},
+    {'max': 1000000, 'fee': 8000},
+    {'max': 2000000, 'fee': 15000},
+    {'max': 3000000, 'fee': 20000},
+  ];
+
+  List<Map<String, int>> get effectiveWaveFeeTable =>
+      waveFeeTable ?? defaultWaveFeeTable;
+
   Map<String, dynamic> toJson() => {
-    'kbzRate':    kbzRate,
-    'cbRate':     cbRate,
-    'yomaRate':   yomaRate,
-    'extraRates': extraRates,
+    'kbzRate':      kbzRate,
+    'cbRate':       cbRate,
+    'yomaRate':     yomaRate,
+    'extraRates':   extraRates,
+    if (waveFeeTable != null) 'waveFeeTable': waveFeeTable,
   };
 
-  static ChargeRates fromJson(Map<String, dynamic> j) => ChargeRates(
-    kbzRate:    (j['kbzRate']  as num?)?.toDouble() ?? 0.0002,
-    cbRate:     (j['cbRate']   as num?)?.toDouble() ?? 0.00025,
-    yomaRate:   (j['yomaRate'] as num?)?.toDouble() ?? 0.00015,
-    extraRates: (j['extraRates'] as Map<String, dynamic>?)
-            ?.map((k, v) => MapEntry(k, (v as num).toDouble())) ??
-        {},
-  );
+  static ChargeRates fromJson(Map<String, dynamic> j) {
+    List<Map<String, int>>? wft;
+    final raw = j['waveFeeTable'];
+    if (raw is List) {
+      wft = raw
+          .map((e) => (e as Map).map(
+              (k, v) => MapEntry(k.toString(), (v as num).toInt())))
+          .toList();
+    }
+    return ChargeRates(
+      kbzRate:      (j['kbzRate']  as num?)?.toDouble() ?? 0.0002,
+      cbRate:       (j['cbRate']   as num?)?.toDouble() ?? 0.00025,
+      yomaRate:     (j['yomaRate'] as num?)?.toDouble() ?? 0.00015,
+      extraRates:   (j['extraRates'] as Map<String, dynamic>?)
+              ?.map((k, v) => MapEntry(k, (v as num).toDouble())) ??
+          {},
+      waveFeeTable: wft,
+    );
+  }
 
   static Future<ChargeRates> loadForBoss(String bossId) async {
     try {
