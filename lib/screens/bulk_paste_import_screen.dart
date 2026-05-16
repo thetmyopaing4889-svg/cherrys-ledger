@@ -45,11 +45,21 @@ int _wavePasswordFee(int transfer) {
 /// Banking charge rounded UP to the nearest 100 MMK.
 /// Uses per-boss configurable rates from [ChargeRates].
 int _bankCharge(String method, int transfer, ChargeRates rates) {
-  double rate;
+  double? rate;
   if      (method == _mKBZ)  rate = rates.kbzRate;
   else if (method == _mCB)   rate = rates.cbRate;
   else if (method == _mYoma) rate = rates.yomaRate;
-  else return 0;
+  else {
+    // Check extra/custom bank rates (case-insensitive)
+    final lower = method.toLowerCase();
+    for (final entry in rates.extraRates.entries) {
+      if (entry.key.toLowerCase() == lower) {
+        rate = entry.value;
+        break;
+      }
+    }
+  }
+  if (rate == null) return 0;
   final raw = transfer * rate;
   return (raw / 100).ceil() * 100;
 }

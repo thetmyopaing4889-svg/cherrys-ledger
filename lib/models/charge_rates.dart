@@ -5,25 +5,31 @@ class ChargeRates {
   final double kbzRate;   // e.g. 0.0002 = 0.02%
   final double cbRate;    // e.g. 0.00025 = 0.025%
   final double yomaRate;  // e.g. 0.00015 = 0.015%
+  final Map<String, double> extraRates; // e.g. {"AYA": 0.0002}
 
   const ChargeRates({
     this.kbzRate  = 0.0002,
     this.cbRate   = 0.00025,
     this.yomaRate = 0.00015,
+    this.extraRates = const {},
   });
 
   static const ChargeRates defaults = ChargeRates();
 
   Map<String, dynamic> toJson() => {
-    'kbzRate':  kbzRate,
-    'cbRate':   cbRate,
-    'yomaRate': yomaRate,
+    'kbzRate':    kbzRate,
+    'cbRate':     cbRate,
+    'yomaRate':   yomaRate,
+    'extraRates': extraRates,
   };
 
   static ChargeRates fromJson(Map<String, dynamic> j) => ChargeRates(
-    kbzRate:  (j['kbzRate']  as num?)?.toDouble() ?? 0.0002,
-    cbRate:   (j['cbRate']   as num?)?.toDouble() ?? 0.00025,
-    yomaRate: (j['yomaRate'] as num?)?.toDouble() ?? 0.00015,
+    kbzRate:    (j['kbzRate']  as num?)?.toDouble() ?? 0.0002,
+    cbRate:     (j['cbRate']   as num?)?.toDouble() ?? 0.00025,
+    yomaRate:   (j['yomaRate'] as num?)?.toDouble() ?? 0.00015,
+    extraRates: (j['extraRates'] as Map<String, dynamic>?)
+            ?.map((k, v) => MapEntry(k, (v as num).toDouble())) ??
+        {},
   );
 
   static Future<ChargeRates> loadForBoss(String bossId) async {
