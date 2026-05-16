@@ -3,6 +3,7 @@ import '../main.dart';
 import '../models/boss.dart';
 import 'add_boss_screen.dart';
 import 'boss_detail_screen.dart';
+import 'global_settings_screen.dart';
 
 class BossListScreen extends StatefulWidget {
   const BossListScreen({super.key});
@@ -70,9 +71,18 @@ class _BossListScreenState extends State<BossListScreen> {
           style: TextStyle(fontWeight: FontWeight.w900),
         ),
         centerTitle: true,
-        automaticallyImplyLeading: false, // ✅ remove back arrow
+        automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFFFFF3F7),
         surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Color(0xFF9F1239)),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const GlobalSettingsScreen()),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _cherry,

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../models/ledger_tx.dart';
@@ -199,33 +200,54 @@ class _BulkParser {
     return '';
   }
 
+  // ── Myanmar digit normalizer ──
+
+  /// Converts Myanmar/Burmese digits (၀-၉) to ASCII (0-9).
+  static String _normMyanmarDigits(String text) {
+    const mm = '၀၁၂၃၄၅၆၇၈၉';
+    var result = text;
+    for (int i = 0; i < 10; i++) {
+      result = result.replaceAll(mm[i], '$i');
+    }
+    return result;
+  }
+
   // ── amount extraction ──
 
   static int _extractAmount(String lower, String phone) {
-    var text = lower;
+    // Normalise Myanmar digits first so regex \d matches them
+    var text = _normMyanmarDigits(lower);
     if (phone.isNotEmpty) text = text.replaceAll(phone, ' ');
     text = text.replaceAll(RegExp(r'09\d{7,9}'), ' ');
-    // Also remove long bank account numbers (≥10 pure digits)
     text = text.replaceAll(RegExp(r'\b\d{10,}\b'), ' ');
 
-    // ── Combined Myanmar units: sum ALL သိန်း + ALL သောင်း ──
-    // e.g. "100 သိန်း 4သောင်း" = 10,000,000 + 40,000 = 10,040,000
-    final lakhRe  = RegExp(r'(\d+\.?\d*)\s*သိန်း');
-    final thousRe = RegExp(r'(\d+\.?\d*)\s*သောင်း');
+    // ── Combined Myanmar units (both orderings) ──
+    // Forward:  "30 သိန်း"  or  "4 သောင်း"
+    // Reversed: "သိန်း 30"  or  "သောင်း 4"
+    final lakhFwd  = RegExp(r'(\d+\.?\d*)\s*သိန်း');
+    final lakhRev  = RegExp(r'သိန်း\s*(\d+\.?\d*)');
+    final thousFwd = RegExp(r'(\d+\.?\d*)\s*သောင်း');
+    final thousRev = RegExp(r'သောင်း\s*(\d+\.?\d*)');
 
-    int lakhTotal  = 0;
-    for (final m in lakhRe.allMatches(text)) {
-      final val = double.tryParse(m.group(1)!) ?? 0.0;
-      lakhTotal += (val * 100000).round();
+    double lakhSum = 0;
+    for (final m in lakhFwd.allMatches(text)) {
+      lakhSum += double.tryParse(m.group(1)!) ?? 0.0;
+    }
+    for (final m in lakhRev.allMatches(text)) {
+      lakhSum += double.tryParse(m.group(1)!) ?? 0.0;
     }
 
-    int thousTotal = 0;
-    for (final m in thousRe.allMatches(text)) {
-      final val = double.tryParse(m.group(1)!) ?? 0.0;
-      thousTotal += (val * 10000).round();
+    double thousSum = 0;
+    for (final m in thousFwd.allMatches(text)) {
+      thousSum += double.tryParse(m.group(1)!) ?? 0.0;
+    }
+    for (final m in thousRev.allMatches(text)) {
+      thousSum += double.tryParse(m.group(1)!) ?? 0.0;
     }
 
-    if (lakhTotal > 0 || thousTotal > 0) return lakhTotal + thousTotal;
+    final myanmarTotal =
+        (lakhSum * 100000).round() + (thousSum * 10000).round();
+    if (myanmarTotal > 0) return myanmarTotal;
 
     // English lakh
     final lakhEn = RegExp(r'(\d+\.?\d*)\s*l(?:akh)?\b', caseSensitive: false);
@@ -243,7 +265,6 @@ class _BulkParser {
           .group(1)!
           .replaceAll(',', '')
           .replaceAll(RegExp(r'\.$'), '');
-      // Skip long bank account numbers
       if (raw.replaceAll('.', '').length >= 10) continue;
       final val = (double.tryParse(raw) ?? 0.0).round();
       if (val > maxVal) maxVal = val;
@@ -275,9 +296,12 @@ class _BulkParser {
       // Remove long bank account numbers mid-line
       cleaned = cleaned.replaceAll(RegExp(r'\b\d{10,}\b'), '');
 
-      // Remove Myanmar unit amount expressions
+      // Remove Myanmar unit amount expressions (both orderings + Myanmar digits)
+      cleaned = _normMyanmarDigits(cleaned);
       cleaned = cleaned.replaceAll(RegExp(r'\d+\.?\d*\s*သိန်း'), '');
+      cleaned = cleaned.replaceAll(RegExp(r'သိန်း\s*\d+\.?\d*'), '');
       cleaned = cleaned.replaceAll(RegExp(r'\d+\.?\d*\s*သောင်း'), '');
+      cleaned = cleaned.replaceAll(RegExp(r'သောင်း\s*\d+\.?\d*'), '');
       cleaned = cleaned.replaceAll(
           RegExp(r'\d+\.?\d*\s*l(?:akh)?\b', caseSensitive: false), '');
 
@@ -353,10 +377,12 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
   static const _depColor   = Color(0xFF16A34A);
 
   // ── state ──
-  DateTime    _date   = DateTime.now();
-  String      _txType = 'withdraw';
-  bool        _saving = false;
-  ChargeRates _rates  = const ChargeRates();
+  DateTime    _date      = DateTime.now();
+  String      _txType    = 'withdraw';
+  bool        _saving    = false;
+  bool        _aiParsing = false;
+  ChargeRates _rates     = const ChargeRates();
+  static const _geminiKeyPref = 'gemini_api_key';
 
   final _pasteCtrl       = TextEditingController();
   final List<String>    _queue  = [];
@@ -570,11 +596,13 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     _clearSavedSession();
   }
 
-  void _parseAll() {
+  Future<void> _parseAll() async {
     if (_queue.isEmpty) {
       _snack('Queue မရှိသေးပါ။ Add to Queue နှိပ်ပါ။');
       return;
     }
+
+    // ── Step 1: Regex parse all blocks ──
     for (final d in _drafts) d.dispose();
     _drafts.clear();
     for (final block in _queue) {
@@ -591,6 +619,108 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
     }
     setState(() {});
     _autoSave();
+
+    // ── Step 2: AI fallback for rows regex couldn't parse ──
+    final failedIdx = <int>[];
+    for (int i = 0; i < _drafts.length; i++) {
+      if (_drafts[i].transfer == 0 || _drafts[i].method.isEmpty) {
+        failedIdx.add(i);
+      }
+    }
+    if (failedIdx.isEmpty) return;
+
+    final prefs  = await SharedPreferences.getInstance();
+    final apiKey = prefs.getString(_geminiKeyPref) ?? '';
+    if (apiKey.isEmpty) return; // No key — silently skip AI
+
+    setState(() => _aiParsing = true);
+    try {
+      final results = await _callGemini(apiKey, failedIdx);
+      for (final r in results) {
+        final localIdx = r['idx'] as int? ?? -1;
+        if (localIdx < 0 || localIdx >= failedIdx.length) continue;
+        final draftIdx = failedIdx[localIdx];
+        final d = _drafts[draftIdx];
+
+        final method   = (r['method']     as String? ?? '').trim();
+        final amountMk = (r['amount_mmk'] as num?)?.toInt() ?? 0;
+        final name     = (r['name']       as String? ?? '').trim();
+
+        if (method.isNotEmpty)  d.methodCtrl.text   = method;
+        if (amountMk > 0)       d.transferCtrl.text = amountMk.toString();
+        if (name.isNotEmpty)    d.nameCtrl.text      = name;
+      }
+      setState(() {});
+      _autoSave();
+    } catch (e) {
+      _snack('AI parse မအောင်မြင်ပါ: $e');
+    } finally {
+      if (mounted) setState(() => _aiParsing = false);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _callGemini(
+      String apiKey, List<int> indices) async {
+    final blocks = indices
+        .asMap()
+        .entries
+        .map((e) => '${e.key}. ${_queue[e.value]}')
+        .join('\n\n');
+
+    final prompt = '''
+မြန်မာ ငွေလွှဲ transaction text တွေမှ method, amount_mmk, name ကို ဆွဲထုတ်ပေး။
+
+Rules:
+- method: "KBZ","CB","Yoma","WavePay","KBZPay","KPay","Wave Password" သို့မဟုတ် text ထဲက ဘဏ်/app အမည်
+- amount_mmk: MMK integer (သိန်း=100000, သောင်း=10000, ၃၀=30)
+- name: လူနာမည် (phone number မဟုတ်)
+- မသိရင် "" နှင့် 0 ပေး
+
+JSON array ဖြင့်သာ ပြန်ပေးပါ (မှတ်ချက်မပါဘဲ):
+[{"idx":0,"method":"...","amount_mmk":0,"name":"..."}]
+
+Blocks:
+$blocks''';
+
+    final response = await http
+        .post(
+          Uri.parse(
+            'https://generativelanguage.googleapis.com/v1beta/models/'
+            'gemini-1.5-flash:generateContent?key=$apiKey',
+          ),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'contents': [
+              {
+                'parts': [
+                  {'text': prompt}
+                ]
+              }
+            ],
+            'generationConfig': {
+              'temperature': 0,
+              'maxOutputTokens': 1024,
+            },
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
+
+    if (response.statusCode != 200) {
+      throw 'HTTP ${response.statusCode}';
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final text = (data['candidates'] as List?)
+            ?.firstOrNull?['content']?['parts']
+            ?.firstOrNull?['text'] as String? ??
+        '';
+
+    final match = RegExp(r'\[[\s\S]*?\]').firstMatch(text);
+    if (match == null) throw 'JSON array မတွေ့ပါ';
+
+    return (jsonDecode(match.group(0)!) as List)
+        .whereType<Map<String, dynamic>>()
+        .toList();
   }
 
   void _removeRow(int idx) {
@@ -871,8 +1001,30 @@ class _BulkPasteImportScreenState extends State<BulkPasteImportScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          _btn('Parse All  (${_queue.length} block(s))',
-              Icons.auto_fix_high_rounded, _cherryDark, _parseAll),
+          _aiParsing
+              ? SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _cherryDark,
+                      foregroundColor: Colors.white,
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: null,
+                    icon: const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white)),
+                    label: const Text('AI parsing…',
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 12)),
+                  ),
+                )
+              : _btn('Parse All  (${_queue.length} block(s))',
+                  Icons.auto_fix_high_rounded, _cherryDark, _parseAll),
         ],
       ],
     ),
