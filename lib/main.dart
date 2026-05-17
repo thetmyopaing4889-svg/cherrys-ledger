@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'screens/welcome_screen.dart';
 import 'state/boss_store.dart';
 import 'state/tx_store.dart';
+import 'services/supabase_sync.dart';
 
 final bossStore = BossStore();
-final txStore = TxStore();
+final txStore   = TxStore();
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseSyncService.init();
   runApp(const CherrysLedgerApp());
 }
 

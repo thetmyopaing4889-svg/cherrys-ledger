@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ledger_tx.dart';
+import '../services/supabase_sync.dart';
 
 class TxStore extends ChangeNotifier {
   List<LedgerTx> get items => _txs;
 
-  static const _kKey = "cherrys_ledger_transactions_v1";
+  static const _kKey = 'cherrys_ledger_transactions_v1';
 
   final List<LedgerTx> _txs = [];
   bool _loaded = false;
@@ -15,7 +16,9 @@ class TxStore extends ChangeNotifier {
 
   Future<void> load() async {
     if (_loaded) return;
-    final sp = await SharedPreferences.getInstance();
+
+    // 1. Load local data first (fast, offline-safe)
+    final sp  = await SharedPreferences.getInstance();
     final raw = sp.getString(_kKey);
     _txs.clear();
     if (raw != null && raw.trim().isNotEmpty) {
@@ -26,10 +29,27 @@ class TxStore extends ChangeNotifier {
     }
     _loaded = true;
     notifyListeners();
+
+    // 2. Pull from Supabase in background and merge
+    _syncFromCloud();
+  }
+
+  Future<void> _syncFromCloud() async {
+    try {
+      final result = await SupabaseSyncService.pullAndMerge(
+        localBosses: [],
+        localTxs:    List.from(_txs),
+      );
+      if (result.newTxs.isNotEmpty) {
+        _txs.addAll(result.newTxs);
+        await _save();
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Future<void> _save() async {
-    final sp = await SharedPreferences.getInstance();
+    final sp  = await SharedPreferences.getInstance();
     final raw = jsonEncode(_txs.map((e) => e.toJson()).toList());
     await sp.setString(_kKey, raw);
   }
@@ -58,6 +78,7 @@ class TxStore extends ChangeNotifier {
     _txs.add(t);
     await _save();
     notifyListeners();
+    SupabaseSyncService.upsertTx(t);
   }
 
   Future<void> softDelete(String txId) async {
@@ -66,24 +87,19 @@ class TxStore extends ChangeNotifier {
       _txs[idx] = _txs[idx].copyWith(deleted: true);
       await _save();
       notifyListeners();
+      SupabaseSyncService.upsertTx(_txs[idx]);
     }
   }
 
-
   Future<void> updateTx(LedgerTx t) async {
-
     final idx = _txs.indexWhere((x) => x.id == t.id);
-
     if (idx < 0) return;
-
     _txs[idx] = t;
-
     await _save();
-
     notifyListeners();
-
+    SupabaseSyncService.upsertTx(t);
   }
 
-
-  // For future: edit/update, etc.
+  /// Push all local transactions to Supabase (initial setup for second phone).
+  Future<void> pushAll() => SupabaseSyncService.upsertTxs(_txs);
 }
