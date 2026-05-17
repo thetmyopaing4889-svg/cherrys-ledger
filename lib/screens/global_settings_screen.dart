@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../main.dart';
 
 class GlobalSettingsScreen extends StatefulWidget {
   const GlobalSettingsScreen({super.key});
@@ -18,6 +19,7 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
   final _keyCtrl = TextEditingController();
   bool _loading  = true;
   bool _saving   = false;
+  bool _syncing  = false;
   bool _obscure  = true;
 
   @override
@@ -57,6 +59,31 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
       );
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _syncNow() async {
+    setState(() => _syncing = true);
+    try {
+      await bossStore.pushAll();
+      await txStore.pushAll();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Supabase ကို sync ပြီးပါပြီ ✓'),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sync မအောင်မြင်ပါ: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _syncing = false);
     }
   }
 
@@ -201,6 +228,47 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
                             ),
                           ),
                         ]),
+                      ],
+                    ),
+                  ),
+
+                  // ── Supabase Sync ─────────────────────────────────────
+                  _card(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _sectionLabel('Supabase Sync'),
+                        const Text(
+                          'ဒုတိယ phone မှာ data မပြမချင်း ဒီခလုတ်နှိပ်ပြီး\n'
+                          'local data အကုန်ကို cloud ကို push လုပ်ပါ။',
+                          style: TextStyle(fontSize: 11, color: Colors.black54),
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 46,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0369A1),
+                              foregroundColor: Colors.white,
+                              elevation: 4,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14)),
+                            ),
+                            onPressed: _syncing ? null : _syncNow,
+                            icon: _syncing
+                                ? const SizedBox(
+                                    width: 16, height: 16,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.cloud_upload_outlined),
+                            label: Text(
+                              _syncing ? 'Syncing…' : 'Sync Now (Push All)',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w900, fontSize: 14),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
