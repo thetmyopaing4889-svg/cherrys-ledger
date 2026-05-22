@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'daily_report_screen.dart';
+import 'monthly_report_screen.dart';
+import 'yearly_report_screen.dart';
 
 class ReportsMenuScreen extends StatelessWidget {
   final String bossId;
@@ -104,8 +106,13 @@ class ReportsMenuScreen extends StatelessWidget {
               title: "Monthly Report (လစဉ်)",
               icon: Icons.date_range_rounded,
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Monthly Report ကို နောက်တစ်ဆင့် ဆက်လုပ်မယ်")),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => MonthlyReportScreen(
+                      bossId: bossId,
+                      bossName: bossName,
+                    ),
+                  ),
                 );
               },
             ),
@@ -115,8 +122,13 @@ class ReportsMenuScreen extends StatelessWidget {
               title: "Yearly Report (နှစ်စဉ်)",
               icon: Icons.bar_chart_rounded,
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Yearly Report ကို နောက်တစ်ဆင့် ဆက်လုပ်မယ်")),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => YearlyReportScreen(
+                      bossId: bossId,
+                      bossName: bossName,
+                    ),
+                  ),
                 );
               },
             ),
