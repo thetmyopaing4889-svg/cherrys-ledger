@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feat-tx-longpress-edit" ]
   workflow_dispatch:
 
 jobs:
@@ -29,7 +29,15 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_B64 }}" | base64 --decode > android/app/cherry_release.keystore
+
       - name: Build APK (release)
+        env:
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: flutter build apk --release
 
       - name: Upload APK artifact
@@ -37,3 +45,4 @@ jobs:
         with:
           name: cherrys-ledger-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
