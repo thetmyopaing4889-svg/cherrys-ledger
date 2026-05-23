@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 
@@ -17,10 +19,11 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
   static const _geminiPref = 'gemini_api_key';
 
   final _keyCtrl = TextEditingController();
-  bool _loading  = true;
-  bool _saving   = false;
-  bool _syncing  = false;
-  bool _obscure  = true;
+  bool   _loading   = true;
+  bool   _saving    = false;
+  bool   _syncing   = false;
+  bool   _obscure   = true;
+  String _saveLabel = 'Save Key';
 
   @override
   void initState() {
@@ -45,20 +48,88 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
 
   Future<void> _save() async {
     final key = _keyCtrl.text.trim();
-    setState(() => _saving = true);
-    try {
+
+    // Empty key → just clear and save
+    if (key.isEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      if (key.isEmpty) {
-        await prefs.remove(_geminiPref);
-      } else {
-        await prefs.setString(_geminiPref, key);
-      }
+      await prefs.remove(_geminiPref);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Settings သိမ်းပြီးပါပြီ။')),
+        const SnackBar(content: Text('API Key ဖျက်ပြီးပါပြီ။')),
+      );
+      return;
+    }
+
+    // Validate key first
+    setState(() { _saving = true; _saveLabel = 'Checking…'; });
+    try {
+      final valid = await _testGeminiKey(key);
+      if (!mounted) return;
+
+      if (valid == null) {
+        // Network error
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Internet မရှိပါ — key စစ်မရပါ။'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      if (!valid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Key မမှန်ပါ (Invalid API Key) — သိမ်းမည်မဟုတ်ပါ။'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+
+      // Key is valid → save
+      setState(() => _saveLabel = 'Saving…');
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_geminiPref, key);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Key အလုပ်လုပ်ပါတယ် ✓ — သိမ်းပြီးပါပြီ။'),
+          backgroundColor: Color(0xFF16A34A),
+        ),
       );
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() { _saving = false; _saveLabel = 'Save Key'; });
+    }
+  }
+
+  /// Returns true = valid, false = invalid key, null = network error
+  Future<bool?> _testGeminiKey(String key) async {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+        'gemini-2.0-flash:generateContent';
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('$url?key=$key'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'contents': [
+                {
+                  'parts': [
+                    {'text': 'hi'}
+                  ]
+                }
+              ],
+              'generationConfig': {'maxOutputTokens': 1},
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode == 200) return true;
+      if (resp.statusCode == 400 || resp.statusCode == 403) return false;
+      return false;
+    } catch (_) {
+      return null; // network / timeout
     }
   }
 
@@ -176,7 +247,6 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        // Get key link hint
                         Row(children: [
                           const Icon(Icons.open_in_new, size: 13, color: Colors.blueGrey),
                           const SizedBox(width: 4),
@@ -205,9 +275,11 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
                                         child: CircularProgressIndicator(
                                             strokeWidth: 2, color: Colors.white))
                                     : const Icon(Icons.save_alt_rounded),
-                                label: Text(_saving ? 'Saving…' : 'Save Key',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w900, fontSize: 14)),
+                                label: Text(
+                                  _saving ? _saveLabel : 'Save Key',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w900, fontSize: 14),
+                                ),
                               ),
                             ),
                           ),
@@ -221,7 +293,7 @@ class _GlobalSettingsScreenState extends State<GlobalSettingsScreen> {
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(14)),
                               ),
-                              onPressed: _clear,
+                              onPressed: _saving ? null : _clear,
                               icon: const Icon(Icons.delete_outline, size: 16),
                               label: const Text('Clear',
                                   style: TextStyle(fontWeight: FontWeight.w700)),
